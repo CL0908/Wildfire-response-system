@@ -14,7 +14,7 @@ from viewshed import generate_candidate_sites, compute_viewsheds, coverage_overl
 from solvers.greedy import greedy_coverage
 from solvers.ilp import ilp_coverage
 from solvers.qubo_sa import sa_solve
-from viz.map_viz import plot_placement_static, plot_folium_map
+from benchmarks.map_viz import plot_placement_static, plot_folium_map
 
 OUT = os.path.dirname(os.path.abspath(__file__))
 
@@ -41,7 +41,7 @@ def main(quick=False):
         (GRID, GRID), n_candidates=N_SITES,
         priority=surf["priority"], dem_norm=surf["dem"], seed=SEED
     )
-    viewsheds = compute_viewsheds(surf["dem_m"], sites, max_range_cells=GRID // 2)
+    viewsheds = compute_viewsheds(surf["dem_m"], sites)  # default range: 4 km
     stats = coverage_overlap_stats(viewsheds, GRID * GRID)
     print(f"    {stats}")
 
@@ -80,11 +80,14 @@ def main(quick=False):
     if not quick:
         try:
             from solvers.qaoa import run_qaoa
-            for mode, label in [("plain", "QAOA"), ("ws", "WS-QAOA"), ("wsxy", "WSXY-QAOA")]:
+            for mode, label in [("plain", "QAOA"), ("xy", "XY-QAOA"), ("wsxy", "WSXY-QAOA")]:
                 r = run_qaoa(viewsheds, weights, N_SENSORS, p_layers=2, mode=mode)
-                results[label] = (r["chosen"], r["objective"])
-                print(f"    {label}: {r['objective']:.4f}  depth={r['circuit_depth']}  "
-                      f"iters={r['iterations']}")
+                if r["chosen"]:
+                    results[label] = (r["chosen"], r["objective"])
+                print(f"    {label}: best shot {r['objective']:.4f}  "
+                      f"P(optimal)={r['p_optimal']:.4f} "
+                      f"(random placement {r['p_optimal_random']:.4f})  "
+                      f"P(feasible)={r['p_feasible']:.3f}")
         except Exception as e:
             print(f"    QAOA skipped: {e}")
 

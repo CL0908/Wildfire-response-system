@@ -1,14 +1,24 @@
 """
-QAOA family: Plain QAOA, WS-QAOA.
+QAOA family on a pure-NumPy statevector simulator.
 
-Pure-NumPy statevector simulator (no Qiskit in the hot loop).
-Qiskit used only for SparsePauliOp Hamiltonian construction.
+  plain : uniform start, X mixer, cardinality enforced by a penalty term.
+  xy    : Dicke start (uniform over all N-sensor placements) with a ring XY
+          mixer, which keeps every amplitude at exactly N sensors.
+  wsxy  : warm start with the XY mixer. Solves the LP relaxation of the
+          placement problem classically, clips each site's value c_i to
+          [eps, 1-eps], and starts every qubit at R_Y(2*arcsin(sqrt(c_i)))|0>.
+          The XY mixer and the cost both conserve the number of selected
+          sensors, so P(exactly N sensors) is fixed by this starting state and
+          the circuit cannot improve it. Its baseline is the starting state
+          itself (all angles zero), not random placement.
 
-Shot decode: sample ≥2000 bitstrings from the final state, repair each to
-exactly N sensors (greedy trim/extend), keep the best placement found.
-Two sanity flags are returned per run:
-  params_moved  – did COBYLA actually move (γ,β) from their start?
-  best_ne_seed  – is the best shot different from just sampling the initial state?
+run_qaoa applies the exact coverage objective as a diagonal phase. That is an
+idealised cost oracle: the true objective has terms up to k-body (k = number
+of sites seeing a cell), so it is not a shallow hardware circuit. The 2-local
+Hamiltonians below are an approximation of it, used by qaoa_hardware.py.
+
+Results are reported without classical repair, next to the baseline of
+drawing N-sensor placements uniformly at random.
 """
 
 import numpy as np
@@ -59,6 +69,39 @@ def _apply_rx(sv, q, angle, n):
     return out
 
 
+def _apply_xy(sv, q0, q1, beta, n):
+    """exp(-i*beta*(XX+YY)/2) on (q0, q1): rotates |01> <-> |10>, so the number of 1s is kept."""
+    b0 = 1 << (n - 1 - q0)
+    b1 = 1 << (n - 1 - q1)
+    idxs = np.arange(len(sv))
+    i10 = idxs[(idxs & b0 != 0) & (idxs & b1 == 0)]
+    i01 = i10 ^ b0 ^ b1
+    c, s = np.cos(beta), -1j * np.sin(beta)
+    a10, a01 = sv[i10].copy(), sv[i01].copy()
+    out = sv.copy()
+    out[i10] = c * a10 + s * a01
+    out[i01] = s * a10 + c * a01
+    return out
+
+
+def _xy_pairs(n):
+    """Ring of neighbouring pairs: even pairs, then odd pairs, then the closing pair."""
+    pairs = [(q, q + 1) for q in range(0, n - 1, 2)] + [(q, q + 1) for q in range(1, n - 1, 2)]
+    if n > 2:
+        pairs.append((n - 1, 0))
+    return pairs
+
+
+def _apply_mixer(sv, beta, n, mode):
+    if mode == "plain":
+        for q in range(n):
+            sv = _apply_rx(sv, q, 2 * beta, n)
+    else:
+        for q0, q1 in _xy_pairs(n):
+            sv = _apply_xy(sv, q0, q1, beta, n)
+    return sv
+
+
 # ---------------------------------------------------------------------------
 # Hamiltonian builders
 # ---------------------------------------------------------------------------
@@ -75,74 +118,91 @@ def _pauli_dict_from(n, add_fn):
     return [(lbl, c) for lbl, c in pd.items() if abs(c) > 1e-10] or [(I, 0.0)]
 
 
-def build_cost_hamiltonian(viewsheds, weights, sites):
-    """Compact H_C on y_i variables only (no penalty, uses OR approximation)."""
+def _or_fit(m_max: int) -> tuple[float, float]:
+    """
+    Coefficients (a, b) of the quadratic a*m + b*m*(m-1)/2 that best fits
+    OR(m) = min(1, m) for m = 1..m_max chosen sensors seeing a cell.
+    Exact for m_max <= 2 (a=1, b=-1); least squares beyond that.
+    """
+    if m_max <= 1:
+        return 1.0, 0.0
+    m = np.arange(1, m_max + 1, dtype=float)
+    A = np.stack([m, m * (m - 1) / 2], axis=1)
+    (a, b), *_ = np.linalg.lstsq(A, np.ones_like(m), rcond=None)
+    return float(a), float(b)
+
+
+def _add_coverage_terms(add, viewsheds, weights, sites, n_sensors=None):
+    """Accumulate the 2-local approximation of -sum_c w_c * OR_c, y_i = (1-Z_i)/2."""
     n = len(sites)
     s_to_q = {s: q for q, s in enumerate(sites)}
-    cell_to_sites: dict = {}
-    for s, vs in viewsheds.items():
-        for c in vs:
-            cell_to_sites.setdefault(c, []).append(s)
-
-    pd: dict[str, float] = {}
     I = "I" * n
 
-    def add(lbl, v):
-        pd[lbl] = pd.get(lbl, 0.0) + v
+    def z_label(*qs):
+        lbl = list(I)
+        for q in qs:
+            lbl[n - 1 - q] = "Z"
+        return "".join(lbl)
+
+    cell_to_sites: dict = {}
+    for s in sites:
+        for c in viewsheds[s]:
+            cell_to_sites.setdefault(c, []).append(s)
 
     for c, w in weights.items():
-        seeing = [s for s in cell_to_sites.get(c, []) if s in s_to_q]
+        seeing = [s_to_q[s] for s in cell_to_sites.get(c, [])]
         if not seeing:
             continue
-        if len(seeing) == 1:
-            a = s_to_q[seeing[0]]
-            z = list(I); z[n - 1 - a] = "Z"
-            add(I, -w / 2)
-            add("".join(z), w / 2)
-        elif len(seeing) == 2:
-            a, b = s_to_q[seeing[0]], s_to_q[seeing[1]]
-            add(I, -w * 3 / 4)
-            za = list(I); za[n - 1 - a] = "Z"
-            zb = list(I); zb[n - 1 - b] = "Z"
-            zab = list(I); zab[n - 1 - a] = "Z"; zab[n - 1 - b] = "Z"
-            add("".join(za), w / 4)
-            add("".join(zb), w / 4)
-            add("".join(zab), -w / 4)
-        else:
-            for s in seeing:
-                a = s_to_q[s]
-                z = list(I); z[n - 1 - a] = "Z"
-                add(I, -w / len(seeing))
-                add("".join(z), w / len(seeing))
+        m_max = len(seeing) if n_sensors is None else min(len(seeing), n_sensors)
+        a, b = _or_fit(m_max)
+        for q in seeing:                       # -w*a*y_q
+            add(I, -w * a / 2)
+            add(z_label(q), w * a / 2)
+        for i, q0 in enumerate(seeing):        # -w*b*y_q0*y_q1
+            for q1 in seeing[i + 1:]:
+                add(I, -w * b / 4)
+                add(z_label(q0), w * b / 4)
+                add(z_label(q1), w * b / 4)
+                add(z_label(q0, q1), -w * b / 4)
 
-    terms = [(lbl, c) for lbl, c in pd.items() if abs(c) > 1e-10] or [(I, 0.0)]
+
+def _to_pauli_op(pd, n):
+    terms = [(lbl, c) for lbl, c in pd.items() if abs(c) > 1e-10] or [("I" * n, 0.0)]
     return SparsePauliOp.from_list(terms)
 
 
+def build_cost_hamiltonian(viewsheds, weights, sites, n_sensors=None):
+    """
+    2-local approximation of H_C = -sum_c w_c * OR(y_i : i sees c).
+    Exact while at most two chosen sensors see any one cell; a least-squares
+    quadratic fit otherwise. Pass n_sensors to fit only up to N chosen sensors.
+    """
+    pd: dict[str, float] = {}
+
+    def add(lbl, v):
+        pd[lbl] = pd.get(lbl, 0.0) + v
+
+    _add_coverage_terms(add, viewsheds, weights, sites, n_sensors)
+    return _to_pauli_op(pd, len(sites))
+
+
+def _default_penalty(viewsheds, weights):
+    """Just above the most a single extra sensor can add to the objective."""
+    return 1.5 * max(sum(weights.get(c, 0.0) for c in vs) for vs in viewsheds.values())
+
+
 def build_penalty_cost_hamiltonian(viewsheds, weights, sites, n_sensors, P1=None):
-    """H_C with explicit cardinality penalty (used by plain QAOA)."""
+    """build_cost_hamiltonian plus the cardinality penalty P1*(sum y_i - N)^2."""
     if P1 is None:
-        P1 = sum(weights.values()) * 5
+        P1 = _default_penalty(viewsheds, weights)
     n = len(sites)
-    s_to_q = {s: q for q, s in enumerate(sites)}
     I = "I" * n
     pd: dict[str, float] = {}
 
     def add(lbl, v):
         pd[lbl] = pd.get(lbl, 0.0) + v
 
-    cell_to_sites: dict = {}
-    for s, vs in viewsheds.items():
-        for c in vs:
-            cell_to_sites.setdefault(c, []).append(s)
-
-    for c, w in weights.items():
-        seeing = [s for s in cell_to_sites.get(c, []) if s in s_to_q]
-        for s in seeing:
-            a = s_to_q[s]
-            z = list(I); z[n - 1 - a] = "Z"
-            add(I, -w / 2)
-            add("".join(z), w / 2)
+    _add_coverage_terms(add, viewsheds, weights, sites, n_sensors)
 
     # (sum y_i - N)^2 in Z basis, y_i = (1-Z_i)/2
     offset = n / 2 - n_sensors
@@ -156,8 +216,7 @@ def build_penalty_cost_hamiltonian(viewsheds, weights, sites, n_sensors, P1=None
             zz = list(I); zz[n - 1 - i] = "Z"; zz[n - 1 - j] = "Z"
             add("".join(zz), P1 * 0.5)
 
-    terms = [(lbl, c) for lbl, c in pd.items() if abs(c) > 1e-10] or [(I, 0.0)]
-    return SparsePauliOp.from_list(terms)
+    return _to_pauli_op(pd, n)
 
 
 def _extract_ising(H, n):
@@ -189,9 +248,42 @@ def _simulate(n, init_sv, params, p, mode, z_terms, zz_terms):
             sv = _apply_rzz(sv, q0, q1, 2 * c * g, n)
         for q, c in z_terms:
             sv = _apply_rz(sv, q, 2 * c * g, n)
-        b = float(betas[l])
-        for q in range(n):
-            sv = _apply_rx(sv, q, 2 * b, n)
+        sv = _apply_mixer(sv, float(betas[l]), n, mode)
+    return sv
+
+
+def coverage_diagonal(viewsheds, weights, sites):
+    """
+    Exact covered priority of every one of the 2^n placements.
+    Site sites[q] is selected in basis state idx iff bit (n-1-q) of idx is set.
+    Returns (coverage, hamming_weight) arrays of length 2^n.
+    """
+    n = len(sites)
+    idxs = np.arange(2 ** n)
+    mask_weight: dict[int, float] = {}
+    cell_mask: dict[int, int] = {}
+    for q, s in enumerate(sites):
+        for c in viewsheds[s]:
+            cell_mask[c] = cell_mask.get(c, 0) | (1 << (n - 1 - q))
+    for c, mask in cell_mask.items():
+        mask_weight[mask] = mask_weight.get(mask, 0.0) + weights.get(c, 0.0)
+
+    coverage = np.zeros(2 ** n)
+    for mask, w in mask_weight.items():
+        coverage[idxs & mask != 0] += w
+    hamming = np.zeros(2 ** n, dtype=int)
+    for q in range(n):
+        hamming += (idxs >> q) & 1
+    return coverage, hamming
+
+
+def _simulate_diag(n, init_sv, params, p, mode, phase_diag):
+    """QAOA with the cost applied as an exact diagonal phase."""
+    sv = init_sv.copy()
+    gammas, betas = params[:p], params[p:]
+    for l in range(p):
+        sv = sv * np.exp(-1j * float(gammas[l]) * phase_diag)
+        sv = _apply_mixer(sv, float(betas[l]), n, mode)
     return sv
 
 
@@ -212,11 +304,50 @@ def _expectation(sv, z_terms, zz_terms, const, n):
     return float(exp)
 
 
-def _init_sv(n, n_sensors, mode):
+def lp_relaxation(viewsheds, weights, sites, n_sensors):
+    """Site values c_i in [0, 1] from the LP relaxation of weighted maximum coverage."""
+    from scipy.optimize import linprog
+
+    n = len(sites)
+    cell_to_sites: dict = {}
+    for q, s in enumerate(sites):
+        for c in viewsheds[s]:
+            if weights.get(c, 0.0) > 0:
+                cell_to_sites.setdefault(c, []).append(q)
+    cells = sorted(cell_to_sites)
+
+    # Variables: y_0..y_{n-1}, then one z per cell. Maximise sum w_c z_c.
+    cost = np.concatenate([np.zeros(n), [-weights[c] for c in cells]])
+    A_ub = np.zeros((len(cells), n + len(cells)))
+    for j, c in enumerate(cells):                      # z_c - sum y_i <= 0
+        A_ub[j, n + j] = 1.0
+        A_ub[j, cell_to_sites[c]] = -1.0
+    A_eq = np.concatenate([np.ones(n), np.zeros(len(cells))])[None, :]
+    res = linprog(cost, A_ub=A_ub, b_ub=np.zeros(len(cells)), A_eq=A_eq,
+                  b_eq=[n_sensors], bounds=(0, 1), method="highs")
+    if not res.success:
+        raise RuntimeError(f"LP relaxation failed: {res.message}")
+    return np.clip(res.x[:n], 0.0, 1.0)
+
+
+def _product_state(c):
+    """Tensor product of R_Y(2*arcsin(sqrt(c_q)))|0>; qubit q is bit n-1-q of the index."""
+    n = len(c)
+    idxs = np.arange(2 ** n)
+    sv = np.ones(2 ** n, dtype=complex)
+    for q in range(n):
+        on = idxs & (1 << (n - 1 - q)) != 0
+        sv *= np.where(on, np.sqrt(c[q]), np.sqrt(1.0 - c[q]))
+    return sv
+
+
+def _init_sv(n, n_sensors, mode, warm_c=None):
     sv = np.zeros(2 ** n, dtype=complex)
     if mode == "plain":
         sv[:] = 1.0 / np.sqrt(2 ** n)
-    else:  # ws: Dicke state
+    elif mode == "wsxy":
+        sv = _product_state(warm_c)
+    else:  # Dicke state
         idxs = [sum(1 << b for b in bits) for bits in combinations(range(n), n_sensors)]
         sv[idxs] = 1.0 / np.sqrt(len(idxs))
     return sv
@@ -285,7 +416,8 @@ def _best_from_probs(
     best_bs = "0" * n
 
     for idx in sample_idxs:
-        bs = format(int(idx), f"0{n}b")
+        # Reverse so qubit q sits at bs[n-1-q], the order _repair expects (Qiskit's).
+        bs = format(int(idx), f"0{n}b")[::-1]
         if bs.count("1") != n_sensors:
             violations += 1
         chosen = _repair(bs, n_sensors, sites, viewsheds, site_vs_weight)
@@ -354,84 +486,125 @@ def run_qaoa(
     max_iter: int = 150,
     shots: int = 2000,
     seed: int = 0,
+    restarts: int = 5,
+    warm_start: list[float] | None = None,
+    warm_eps: float = 0.25,
 ) -> dict:
     """
-    mode ∈ {'plain', 'ws'}.
+    mode in {'plain', 'xy', 'wsxy'} (see module docstring). No classical repair
+    is applied. COBYLA is run from `restarts` random starting points; the run
+    with the lowest expected cost is kept. In 'wsxy' mode the first starting
+    point is all zeros (the warm-start state itself). `warm_start` gives c_i
+    per site in sorted-site order (LP relaxation if omitted); values are
+    clipped to [warm_eps, 1 - warm_eps].
 
     Returns dict with keys:
-      chosen, objective, iterations, circuit_depth, mode, n_qubits,
-      constraint_violations  – total shots with Hamming weight ≠ n_sensors,
-      params_moved           – bool: did COBYLA move (γ,β) from x0?
-      best_ne_seed           – bool: best shot ≠ best shot from initial (unoptimised) state?
+      chosen, objective      - best feasible sampled placement ([] and 0.0 if none)
+      optimum                - best N-sensor objective, by enumeration
+      p_feasible             - probability of measuring exactly N sensors
+      p_optimal              - probability of measuring an optimal placement
+      mean_ratio             - expected objective / optimum, infeasible shots count 0
+      p_optimal_random, mean_ratio_random
+                             - the same two numbers for a uniformly random
+                               N-sensor placement (the no-circuit baseline)
+      constraint_violations  - sampled shots with Hamming weight != N
+      params_moved           - did COBYLA move the parameters from their start?
+      warm_start, start_mean_ratio, start_p_optimal
+                             - 'wsxy' only: the clipped c_i, and mean_ratio and
+                               p_optimal of the starting state before any layer
+      iterations             - cost evaluations summed over all restarts
+      shots, mode, n_qubits
     """
-    if not QISKIT_OK:
-        raise ImportError("Install qiskit: pip install qiskit")
-    if mode not in ("plain", "ws"):
-        raise ValueError(f"mode must be 'plain' or 'ws', got {mode!r}")
+    if mode not in ("plain", "xy", "wsxy"):
+        raise ValueError(f"mode must be 'plain', 'xy' or 'wsxy', got {mode!r}")
 
     sites = sorted(viewsheds.keys())
     n = len(sites)
+    if not 0 < n_sensors <= n:
+        raise ValueError(f"n_sensors must be between 1 and {n} (the number of sites), got {n_sensors}")
     rng = np.random.default_rng(seed)
 
-    site_vs_weight = {s: sum(weights.get(c, 0.0) for c in vs)
-                      for s, vs in viewsheds.items()}
+    coverage, hamming = coverage_diagonal(viewsheds, weights, sites)
+    feasible = hamming == n_sensors
+    optimum = float(coverage[feasible].max())
+    is_optimal = feasible & (coverage >= optimum - 1e-9)
 
-    H_C = (build_penalty_cost_hamiltonian(viewsheds, weights, sites, n_sensors)
-           if mode == "plain"
-           else build_cost_hamiltonian(viewsheds, weights, sites))
+    if mode == "plain":
+        cost = -coverage + _default_penalty(viewsheds, weights) * (hamming - n_sensors) ** 2
+        support = np.ones(2 ** n, dtype=bool)
+    else:
+        cost = -coverage
+        support = feasible
+    warm_c = None
+    if mode == "wsxy":
+        if warm_start is None:
+            warm_start = lp_relaxation(viewsheds, weights, sites, n_sensors)
+        if len(warm_start) != n:
+            raise ValueError(f"warm_start needs one value per site ({n}), got {len(warm_start)}")
+        warm_c = np.clip(np.asarray(warm_start, dtype=float), warm_eps, 1.0 - warm_eps)
+        # Score only N-sensor outcomes: the other sectors are frozen by the XY mixer.
+        cost = np.where(feasible, cost, 0.0)
+        support = np.ones(2 ** n, dtype=bool)
+    init_sv = _init_sv(n, n_sensors, mode, warm_c)
 
-    z_terms, zz_terms, const = _extract_ising(H_C, n)
-    init_sv = _init_sv(n, n_sensors, mode)
+    # Rescale the phase so gamma in [0, pi] spans the cost range once.
+    spread = float(cost[support].max() - cost[support].min()) or 1.0
+    phase_diag = cost / spread
 
-    # ── Optimise ──────────────────────────────────────────────────────────────
     eval_count = [0]
 
     def objective(params):
         eval_count[0] += 1
-        sv = _simulate(n, init_sv, params, p_layers, mode, z_terms, zz_terms)
-        return _expectation(sv, z_terms, zz_terms, const, n)
+        sv = _simulate_diag(n, init_sv, params, p_layers, mode, phase_diag)
+        return float((np.abs(sv) ** 2) @ cost)
 
-    x0 = rng.uniform(0, np.pi, 2 * p_layers)
-    result = minimize(objective, x0, method="COBYLA",
-                      options={"maxiter": max_iter, "rhobeg": 0.5})
+    result = x0 = None
+    for attempt in range(max(1, restarts)):
+        start = rng.uniform(0, np.pi, 2 * p_layers)
+        if mode == "wsxy" and attempt == 0:
+            start = np.zeros(2 * p_layers)
+        res = minimize(objective, start, method="COBYLA",
+                       options={"maxiter": max_iter, "rhobeg": 0.5})
+        if result is None or res.fun < result.fun:
+            result, x0 = res, start
 
-    # ── Decode from optimised state ───────────────────────────────────────────
-    sv_opt = _simulate(n, init_sv, result.x, p_layers, mode, z_terms, zz_terms)
-    probs_opt = np.abs(sv_opt) ** 2
-    probs_opt /= probs_opt.sum()
+    sv_opt = _simulate_diag(n, init_sv, result.x, p_layers, mode, phase_diag)
+    probs = np.abs(sv_opt) ** 2
+    probs /= probs.sum()
 
-    best_chosen, best_obj, best_bs, n_violations = _best_from_probs(
-        probs_opt, n, n_sensors, sites, viewsheds, weights, site_vs_weight, shots, rng
-    )
+    feasible_cov = np.where(feasible, coverage, 0.0)
+    samples = rng.choice(len(probs), size=shots, p=probs)
+    sampled_cov = feasible_cov[samples]
+    best_idx = int(samples[int(np.argmax(sampled_cov))])
+    if feasible[best_idx]:
+        chosen = [sites[q] for q in range(n) if best_idx & (1 << (n - 1 - q))]
+        best_obj = float(coverage[best_idx])
+    else:
+        chosen, best_obj = [], 0.0
 
-    # ── Sanity flag 1: did the optimiser actually move the parameters? ────────
-    params_moved = bool(np.any(np.abs(result.x - x0) > 1e-3))
-
-    # ── Sanity flag 2: is best shot ≠ best shot from the INITIAL (p=0) state? ─
-    seed_probs = np.abs(init_sv) ** 2
-    seed_probs /= seed_probs.sum()
-    seed_rng = np.random.default_rng(seed + 99_999)
-    _, _, seed_bs, _ = _best_from_probs(
-        seed_probs, n, n_sensors, sites, viewsheds, weights, site_vs_weight, shots, seed_rng
-    )
-    best_ne_seed = (best_bs != seed_bs)
-
-    # ── Fallback if no shot yielded a placement (shouldn't happen) ────────────
-    if not best_chosen:
-        from solvers.greedy import greedy_coverage
-        best_chosen, best_obj = greedy_coverage(viewsheds, weights, n_sensors)
-        best_ne_seed = False
-
-    depth = _circuit_depth(n, p_layers, len(zz_terms), len(z_terms))
+    extra = {}
+    if mode == "wsxy":
+        start_probs = np.abs(init_sv) ** 2
+        extra = dict(
+            warm_start=[float(c) for c in warm_c],
+            start_mean_ratio=float(start_probs @ feasible_cov) / optimum if optimum > 0 else 0.0,
+            start_p_optimal=float(start_probs[is_optimal].sum()),
+        )
 
     return dict(
-        chosen=best_chosen,
+        **extra,
+        chosen=chosen,
         objective=best_obj,
+        optimum=optimum,
+        p_feasible=float(probs[feasible].sum()),
+        p_optimal=float(probs[is_optimal].sum()),
+        mean_ratio=float(probs @ feasible_cov) / optimum if optimum > 0 else 0.0,
+        p_optimal_random=float(is_optimal.sum() / feasible.sum()),
+        mean_ratio_random=float(coverage[feasible].mean()) / optimum if optimum > 0 else 0.0,
+        constraint_violations=int((~feasible[samples]).sum()),
+        params_moved=bool(np.any(np.abs(result.x - x0) > 1e-3)),
         iterations=eval_count[0],
-        circuit_depth=depth,
+        shots=shots,
         mode=mode,
         n_qubits=n,
-        constraint_violations=n_violations,
-        params_moved=params_moved,
-        best_ne_seed=best_ne_seed,
     )

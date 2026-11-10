@@ -1,4 +1,4 @@
-Instance,ILP (exact),Greedy (CELF),Simulated Annealing,QAOA,WS-QAOA,WSXY-QAOA
-"|S|=8, N=2",1.000,1.000,0.978,0.604,1.000,0.604
-"|S|=10, N=3",1.000,1.000,0.694,0.349,1.000,0.476
-"|S|=12, N=3",1.000,1.000,0.818,0.369,1.000,0.152
+instance,ilp_objective,greedy,sa,random_mean,qaoa_mean,xy_qaoa_mean,wsxy_start_mean,wsxy_qaoa_mean,random_p_optimal,qaoa_p_optimal,xy_qaoa_p_optimal,wsxy_start_p_optimal,wsxy_qaoa_p_optimal,qaoa_p_feasible,xy_qaoa_p_feasible,wsxy_qaoa_p_feasible,qaoa_best_shot,xy_qaoa_best_shot,wsxy_qaoa_best_shot
+"|S|=8, N=2",63.9979,1.0000,1.0000,0.6665,0.3147,0.8414,0.2086,0.2212,0.0357,0.0183,0.2155,0.1001,0.1145,0.4666,1.0000,0.2521,1.0000,1.0000,1.0000
+"|S|=10, N=3",100.1793,0.9715,1.0000,0.7192,0.3152,0.8700,0.1970,0.2107,0.0083,0.0039,0.0958,0.0563,0.0780,0.4363,1.0000,0.2342,1.0000,1.0000,1.0000
+"|S|=12, N=3",72.3113,0.9568,0.8939,0.6804,0.2472,0.8390,0.1407,0.1516,0.0045,0.0017,0.0717,0.0317,0.0436,0.3615,1.0000,0.1726,1.0000,1.0000,1.0000

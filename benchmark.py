@@ -1,17 +1,22 @@
 """
-Benchmark: ILP · Greedy · SA · QAOA · WS-QAOA on three Khao Yai instances.
+Benchmark: ILP · Greedy · SA · QAOA · XY-QAOA · WSXY-QAOA on three Khao Yai instances.
 
-One shared scoring function scores every method identically:
-  enforce exactly N sensors → recompute covered-priority → ratio vs ILP optimal.
+Greedy and SA return one placement each, scored as covered priority / ILP optimum.
+QAOA returns a distribution over placements, so it is scored per shot with no
+classical repair (infeasible shots count as 0) and shown next to the baseline
+of drawing N-sensor placements uniformly at random. WSXY-QAOA starts from the
+LP relaxation, so its baseline is its own starting state ("WSXY start").
 
 Outputs:
-  benchmark.png   – grouped approximation-ratio bar chart
-  stdout          – per-run sanity flags (QAOA only) + violations table
+  benchmark.png     – grouped approximation-ratio bar chart
+  approx_ratio.csv  – the numbers behind it
+  stdout            – per-instance detail
 """
 
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 
+import csv
 import numpy as np
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -27,8 +32,11 @@ from solvers.qubo_sa import sa_solve
 OUT = os.path.dirname(os.path.abspath(__file__))
 
 # Methods shown in bar chart (ILP is the reference line, not a bar)
-BAR_METHODS = ["Greedy (CELF)", "Simulated Annealing", "QAOA", "WS-QAOA"]
-BAR_COLORS  = ["#40916c",       "#e07a5f",              "#d62828", "#264653"]
+BAR_METHODS = ["Greedy (CELF)", "Simulated Annealing", "Random placement",
+               "QAOA", "XY-QAOA", "WSXY start", "WSXY-QAOA"]
+BAR_COLORS  = ["#40916c", "#e07a5f", "#9a9a9a", "#d62828", "#264653", "#c9b8e0", "#7b5ea7"]
+QAOA_METHODS = ("QAOA", "XY-QAOA", "WSXY-QAOA")
+QAOA_LAYERS, QAOA_SHOTS = 4, 2000
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +88,8 @@ def run_instance(n_sites: int, n_sensors: int, seed: int) -> dict:
 
     Returns a dict keyed by method name, each value:
       {ratio, objective, chosen, violation, shot_violations (QAOA only),
-       params_moved, best_ne_seed}
+       params_moved}; QAOA entries also carry p_optimal, p_feasible,
+      best_shot_ratio, and 'ratio' there is the mean over shots.
     Plus key 'ilp_obj' for the reference optimum.
     """
     GRID = 20
@@ -133,43 +142,54 @@ def run_instance(n_sites: int, n_sensors: int, seed: int) -> dict:
         out["Simulated Annealing"] = dict(ratio=0.0, objective=0.0, chosen=[],
                                            violation=True, shot_violations=1)
 
-    # ── QAOA family ───────────────────────────────────────────────────────────
+    # ── QAOA family (per-shot statistics, no repair) ──────────────────────────
     try:
         from solvers.qaoa import run_qaoa
-        for mode, label in [("plain", "QAOA"), ("ws", "WS-QAOA")]:
+        for mode, label in [("plain", "QAOA"), ("xy", "XY-QAOA"), ("wsxy", "WSXY-QAOA")]:
             t0 = time.time()
-            r = run_qaoa(viewsheds, weights, n_sensors,
-                         p_layers=4, mode=mode, max_iter=150, shots=2000)
+            r = run_qaoa(viewsheds, weights, n_sensors, p_layers=QAOA_LAYERS,
+                         mode=mode, max_iter=150, shots=QAOA_SHOTS)
             elapsed = time.time() - t0
 
-            _, obj_q, ratio_q, viol_q = score_placement(
-                r["chosen"], viewsheds, weights, n_sensors, ilp_obj
-            )
+            # The enumerated optimum inside run_qaoa must agree with the ILP.
+            if ilp_obj > 1e-9 and abs(r["optimum"] - ilp_obj) > 1e-6 * ilp_obj:
+                print(f"  WARNING: enumerated optimum {r['optimum']:.4f} != ILP {ilp_obj:.4f}")
+
             out[label] = dict(
-                ratio=ratio_q, objective=obj_q, chosen=r["chosen"],
-                violation=viol_q,
+                ratio=r["mean_ratio"], objective=r["objective"], chosen=r["chosen"],
+                best_shot_ratio=r["objective"] / r["optimum"] if r["optimum"] > 0 else 0.0,
+                p_optimal=r["p_optimal"], p_feasible=r["p_feasible"],
+                violation=not r["chosen"],
                 shot_violations=r["constraint_violations"],
                 params_moved=r["params_moved"],
-                best_ne_seed=r["best_ne_seed"],
                 iterations=r["iterations"],
-                circuit_depth=r["circuit_depth"],
             )
-            # Sanity flags
-            pm  = "YES" if r["params_moved"]  else "NO ← params did not move"
-            bns = "YES" if r["best_ne_seed"]  else "NO ← echoing initial state"
-            print(f"  {label}: obj={obj_q:.4f}  ratio={ratio_q:.3f}  "
-                  f"shots_violated={r['constraint_violations']}/{2000}  "
-                  f"iters={r['iterations']}  depth={r['circuit_depth']}  "
-                  f"time={elapsed:.1f}s")
-            print(f"    [sanity] params moved from x0?         {pm}")
-            print(f"    [sanity] best shot ≠ initial-state seed? {bns}")
+            if mode == "wsxy":
+                out["WSXY start"] = dict(
+                    ratio=r["start_mean_ratio"], p_optimal=r["start_p_optimal"],
+                    p_feasible=r["p_feasible"], shot_violations=0,
+                )
+            out["Random placement"] = dict(
+                ratio=r["mean_ratio_random"], p_optimal=r["p_optimal_random"],
+                p_feasible=1.0, shot_violations=0,
+            )
+            print(f"  {label}: mean ratio/shot={r['mean_ratio']:.3f}  "
+                  f"P(optimal)={r['p_optimal']:.4f}  P(feasible)={r['p_feasible']:.3f}  "
+                  f"best of {QAOA_SHOTS} shots={out[label]['best_shot_ratio']:.3f}  "
+                  f"evals={r['iterations']}  time={elapsed:.1f}s"
+                  + (f"  start: mean={r['start_mean_ratio']:.3f} P(optimal)={r['start_p_optimal']:.4f}"
+                     if mode == "wsxy" else "")
+                  + ("" if r["params_moved"] else "  ← params did not move"))
+        rnd = out["Random placement"]
+        print(f"  Random placement: mean ratio={rnd['ratio']:.3f}  "
+              f"P(optimal)={rnd['p_optimal']:.4f}")
     except Exception as e:
         print(f"  QAOA failed: {e}")
-        for label in ("QAOA", "WS-QAOA"):
-            out[label] = dict(ratio=0.0, objective=0.0, chosen=[],
-                              violation=True, shot_violations=2000,
-                              params_moved=False, best_ne_seed=False,
-                              iterations=0, circuit_depth=0)
+        for label in QAOA_METHODS:
+            out[label] = dict(ratio=0.0, objective=0.0, chosen=[], best_shot_ratio=0.0,
+                              p_optimal=0.0, p_feasible=0.0,
+                              violation=True, shot_violations=QAOA_SHOTS,
+                              params_moved=False, iterations=0)
 
     return out
 
@@ -183,8 +203,8 @@ def plot_benchmark(all_results: list[dict], instance_labels: list[str]):
 
     n_inst = len(instance_labels)
     n_meth = len(BAR_METHODS)
-    width = 0.18
-    group_gap = 0.1
+    width = 0.115
+    group_gap = 0.12
     x = np.arange(n_inst) * (n_meth * width + group_gap)
 
     for mi, (method, color) in enumerate(zip(BAR_METHODS, BAR_COLORS)):
@@ -201,10 +221,14 @@ def plot_benchmark(all_results: list[dict], instance_labels: list[str]):
 
     ax.set_xticks(x + width * (n_meth - 1) / 2)
     ax.set_xticklabels(instance_labels, fontsize=10)
-    ax.set_ylabel("Approximation ratio (vs exact optimum)", fontsize=10)
+    ax.set_ylabel("Covered priority / exact optimum", fontsize=10)
+    ax.set_xlabel("Greedy, SA: the placement returned.  Random and the QAOA variants: "
+                  "expected value of one shot, no repair.",
+                  fontsize=8, color="#555")
     ax.set_ylim(0, 1.05)
     ax.set_title("Khao Yai sensor placement — solution quality", fontsize=12)
-    ax.legend(fontsize=9, framealpha=0.9)
+    ax.legend(fontsize=8, framealpha=0.9, ncol=4, loc="upper center",
+              bbox_to_anchor=(0.5, -0.15))
     ax.grid(axis="y", alpha=0.25)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
@@ -224,16 +248,47 @@ def print_summary_table(all_results: list[dict]):
     print("\n" + "=" * 62)
     print(f"{'Method':<22} {'Constraint violations':>22} {'Mean ratio':>10}")
     print("-" * 62)
-    all_methods = ["Greedy (CELF)", "Simulated Annealing", "QAOA", "WS-QAOA"]
-    for method in all_methods:
-        total_viol = sum(r.get(method, {}).get("shot_violations", 0) for r in all_results)
-        ratios = [r.get(method, {}).get("ratio", 0.0) for r in all_results]
-        mean_r = float(np.mean(ratios))
-        is_qaoa = method in ("QAOA", "WS-QAOA")
-        denom = len(all_results) * 2000 if is_qaoa else len(all_results)
-        viol_str = f"{total_viol}/{denom} shots" if is_qaoa else f"{total_viol}/{len(all_results)} runs"
+    for method in BAR_METHODS:
+        if method in ("Random placement", "WSXY start"):
+            viol_str = "-"
+        elif method in QAOA_METHODS:
+            total = sum(r.get(method, {}).get("shot_violations", 0) for r in all_results)
+            viol_str = f"{total}/{len(all_results) * QAOA_SHOTS} shots"
+        else:
+            total = sum(r.get(method, {}).get("shot_violations", 0) for r in all_results)
+            viol_str = f"{total}/{len(all_results)} runs"
+        mean_r = float(np.mean([r.get(method, {}).get("ratio", 0.0) for r in all_results]))
         print(f"  {method:<20} {viol_str:>22} {mean_r:>10.3f}")
     print("=" * 62)
+
+
+def write_csv(all_results: list[dict], instance_labels: list[str]):
+    """approx_ratio.csv: one row per instance, ratios to the ILP optimum."""
+    path = os.path.join(OUT, "approx_ratio.csv")
+    header = ["instance", "ilp_objective", "greedy", "sa",
+              "random_mean", "qaoa_mean", "xy_qaoa_mean", "wsxy_start_mean", "wsxy_qaoa_mean",
+              "random_p_optimal", "qaoa_p_optimal", "xy_qaoa_p_optimal",
+              "wsxy_start_p_optimal", "wsxy_qaoa_p_optimal",
+              "qaoa_p_feasible", "xy_qaoa_p_feasible", "wsxy_qaoa_p_feasible",
+              "qaoa_best_shot", "xy_qaoa_best_shot", "wsxy_qaoa_best_shot"]
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(header)
+        for label, r in zip(instance_labels, all_results):
+            get = lambda m, k: r.get(m, {}).get(k, 0.0)
+            w.writerow([label, f"{r['ilp_obj']:.4f}"] + [f"{v:.4f}" for v in (
+                get("Greedy (CELF)", "ratio"), get("Simulated Annealing", "ratio"),
+                get("Random placement", "ratio"), get("QAOA", "ratio"), get("XY-QAOA", "ratio"),
+                get("WSXY start", "ratio"), get("WSXY-QAOA", "ratio"),
+                get("Random placement", "p_optimal"), get("QAOA", "p_optimal"),
+                get("XY-QAOA", "p_optimal"),
+                get("WSXY start", "p_optimal"), get("WSXY-QAOA", "p_optimal"),
+                get("QAOA", "p_feasible"), get("XY-QAOA", "p_feasible"),
+                get("WSXY-QAOA", "p_feasible"),
+                get("QAOA", "best_shot_ratio"), get("XY-QAOA", "best_shot_ratio"),
+                get("WSXY-QAOA", "best_shot_ratio"),
+            )])
+    print(f"Saved {path}")
 
 
 # ---------------------------------------------------------------------------
@@ -258,11 +313,12 @@ def main():
         all_results.append(res)
 
     plot_benchmark(all_results, labels)
+    write_csv(all_results, labels)
     print_summary_table(all_results)
 
     # terrain_slope.png — generate once from the first instance's surface
     try:
-        from viz.map_viz import plot_terrain_slope, plot_placement_static
+        from benchmarks.map_viz import plot_terrain_slope, plot_placement_static
         from viewshed import MAX_RANGE_CELLS
         surf = build_priority_surface(grid_rows=20, grid_cols=20, seed=42)
         sites = generate_candidate_sites(

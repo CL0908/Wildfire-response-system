@@ -10,9 +10,15 @@ Workflow
 3. Transpile               — Qiskit maps logical qubits to Marrakesh's
                              heavy-hex physical layout and decomposes
                              everything to the CZ + RZ + SX + X native set.
-4. Hardware execution      — SamplerV2 submits to ibm_marrakesh, decodes
-                             bitstrings with the same per-shot repair and
-                             scoring logic as the local simulator.
+4. Hardware execution      — SamplerV2 submits to ibm_marrakesh. Each shot
+                             is repaired classically to exactly N sensors
+                             (greedy trim/extend) and the best is reported,
+                             so the reported objective is not the circuit's
+                             output alone; check `constraint_violations`.
+
+The cost layer is the 2-local approximation of the coverage objective from
+qaoa.build_cost_hamiltonian (exact while at most two chosen sensors see a
+cell). The local benchmark in qaoa.run_qaoa uses the exact objective instead.
 
 Why this split?
   COBYLA needs ~150 circuit evaluations to converge.  On hardware each
@@ -46,9 +52,10 @@ Notes on Marrakesh
 * Depth budget        — Heron r2 has improved coherence but QAOA depth
   still grows as  p × (3·|ZZ| + |Z| + n).  Recommend p=1 or p=2 for
   hardware; p=4 is fine for the local simulator.
-* WS-QAOA caution     — The Dicke warm-start adds O(2^n) state-prep depth
-  (via StatePreparation decomposition).  For hardware, mode='plain' is
-  the safer choice unless n is very small.
+* XY-QAOA caution     — The Dicke start adds O(2^n) state-prep depth
+  (via StatePreparation decomposition) and the XY mixer adds two-qubit
+  gates per layer.  For hardware, mode='plain' is the safer choice unless
+  n is very small.
 """
 
 import os
@@ -60,6 +67,7 @@ from scipy.optimize import minimize
 from itertools import combinations
 
 from solvers.qaoa import (
+    _xy_pairs,
     build_penalty_cost_hamiltonian,
     build_cost_hamiltonian,
     _extract_ising,
@@ -111,15 +119,21 @@ def _build_circuit(n, n_sensors, z_terms, zz_terms, params, p, mode):
         g = float(gammas[layer])
         b = float(betas[layer])
 
-        # Cost unitary: encode the coverage objective
+        # Cost unitary: 2-local approximation of the coverage objective
         for q0, q1, c in zz_terms:
             qc.rzz(2 * c * g, q0, q1)
         for q, c in z_terms:
             qc.rz(2 * c * g, q)
 
-        # X mixer: RX(2β) on every qubit
-        for q in range(n):
-            qc.rx(2 * b, q)
+        if mode == "plain":
+            # X mixer: RX(2β) on every qubit
+            for q in range(n):
+                qc.rx(2 * b, q)
+        else:
+            # Ring XY mixer: keeps the number of selected sensors fixed
+            from qiskit.circuit.library import XXPlusYYGate
+            for q0, q1 in _xy_pairs(n):
+                qc.append(XXPlusYYGate(2 * b), [q0, q1])
 
     qc.measure(range(n), range(n))
     return qc
@@ -150,20 +164,25 @@ def run_qaoa_hardware(
     ibm_token          IBM Quantum API token (or set env QISKIT_IBM_TOKEN).
     backend_name       Target backend; default 'ibm_marrakesh'.
     p_layers           QAOA depth.  Use 1–2 for hardware; 4 for simulator.
-    mode               'plain' (X-mixer, |+⟩^n) or 'ws' (X-mixer, Dicke warm-start).
+    mode               'plain' (X mixer, |+⟩^n) or 'xy' (ring XY mixer, Dicke start).
     max_iter           COBYLA iterations for classical optimisation.
     shots              Measurement shots to request from hardware.
     optimization_level Qiskit transpiler level 1–3 (3 = best SWAP routing).
 
     Returns
     -------
-    dict — identical keys to run_qaoa() in qaoa.py, plus:
+    dict — chosen, objective (best shot after classical repair), iterations,
+    circuit_depth, mode, n_qubits, constraint_violations, params_moved,
+    best_ne_seed, plus:
       transpiled_depth    int   gate depth after Qiskit transpilation
       transpiled_cz_count int   number of CZ gates in the transpiled circuit
       job_id              str   IBM Quantum job identifier
     """
     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
     from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
+
+    if mode not in ("plain", "xy"):
+        raise ValueError(f"mode must be 'plain' or 'xy', got {mode!r}")
 
     sites = sorted(viewsheds.keys())
     n     = len(sites)
@@ -175,7 +194,7 @@ def run_qaoa_hardware(
     # ── 1. Build Ising Hamiltonian ────────────────────────────────────────
     H_C = (build_penalty_cost_hamiltonian(viewsheds, weights, sites, n_sensors)
            if mode == "plain"
-           else build_cost_hamiltonian(viewsheds, weights, sites))
+           else build_cost_hamiltonian(viewsheds, weights, sites, n_sensors))
     z_terms, zz_terms, const = _extract_ising(H_C, n)
     init_sv = _init_sv(n, n_sensors, mode)
 
@@ -331,8 +350,8 @@ if __name__ == "__main__":
     ap.add_argument("--p",       type=int, default=2,
                     help="QAOA depth layers (recommend 1 or 2 for hardware)")
     ap.add_argument("--shots",   type=int, default=2000)
-    ap.add_argument("--mode",    default="plain", choices=["plain", "ws"],
-                    help="plain = X-mixer + |+>^n  |  ws = X-mixer + Dicke warm-start")
+    ap.add_argument("--mode",    default="plain", choices=["plain", "xy"],
+                    help="plain = X mixer + |+>^n  |  xy = ring XY mixer + Dicke start")
     ap.add_argument("--opt-level", type=int, default=3, dest="opt_level",
                     help="Qiskit transpiler optimisation level (1–3)")
     args = ap.parse_args()
@@ -377,7 +396,7 @@ if __name__ == "__main__":
     print("RESULT")
     print("-" * 60)
     print(f"  chosen sites      : {result['chosen']}")
-    print(f"  objective         : {result['objective']:.4f}")
+    print(f"  objective         : {result['objective']:.4f}  (best shot after classical repair)")
     print(f"  ratio vs ILP      : {ratio:.3f}")
     print(f"  violations        : {result['constraint_violations']}/{args.shots} shots")
     print(f"  [sanity] params_moved  : {pm}")
