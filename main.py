@@ -17,6 +17,67 @@ from solvers.qubo_sa import sa_solve
 from benchmarks.map_viz import plot_placement_static, plot_folium_map
 
 OUT = os.path.dirname(os.path.abspath(__file__))
+DASHBOARD_DATA = os.path.join(OUT, "dashboards", "public", "results.json")
+
+
+def write_results_json(surf, sites, viewsheds, weights, results, n_sensors, grid,
+                       qaoa_stats=None, path=DASHBOARD_DATA):
+    """
+    Everything the dashboard draws, from this run. `results` is {method: (chosen, objective)}.
+    For QAOA methods the placement is the best sampled shot, so `qaoa_stats` carries the
+    per-shot probabilities that say how often the circuit actually produces it.
+    """
+    import csv, json
+    from datetime import date
+    from viewshed import CELL_SIZE_M, MAST_HEIGHT_M, MAX_RANGE_M
+
+    def grid_list(a, digits):
+        return [[round(float(v), digits) for v in row] for row in a]
+
+    optimum = results["ILP"][1] if "ILP" in results else None
+    methods = []
+    for name, (chosen, objective) in results.items():
+        covered = sorted(set().union(*(viewsheds[s] for s in chosen))) if chosen else []
+        methods.append(dict(
+            name=name,
+            kind="quantum (simulated)" if "QAOA" in name else "classical",
+            chosen=[int(s) for s in chosen],
+            objective=round(float(objective), 4),
+            ratio=round(float(objective) / optimum, 4) if optimum else None,
+            covered_cells=[int(c) for c in covered],
+            sampling=(qaoa_stats or {}).get(name),
+        ))
+
+    benchmark = []
+    csv_path = os.path.join(OUT, "approx_ratio.csv")
+    if os.path.exists(csv_path):
+        with open(csv_path, newline="") as f:
+            benchmark = list(csv.DictReader(f))
+
+    data = dict(
+        generated=date.today().isoformat(),
+        terrain="synthetic",
+        grid=dict(rows=grid, cols=grid, cell_size_m=CELL_SIZE_M),
+        mast_height_m=MAST_HEIGHT_M,
+        range_m=MAX_RANGE_M,
+        n_sensors=n_sensors,
+        total_priority=round(sum(weights.values()), 4),
+        optimum=round(float(optimum), 4) if optimum else None,
+        layers=dict(
+            priority=grid_list(surf["priority"], 4),
+            hazard=grid_list(surf["hazard"], 4),
+            value=grid_list(surf["value"], 4),
+            elevation_m=grid_list(surf["dem_m"], 1),
+        ),
+        sites=[dict(id=i, row=int(r), col=int(c)) for i, (r, c) in enumerate(sites)],
+        viewsheds={str(i): sorted(int(c) for c in vs) for i, vs in viewsheds.items()},
+        methods=methods,
+        benchmark=benchmark,
+    )
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(data, f, separators=(",", ":"))
+    return path
 
 
 def main(quick=False):
@@ -52,6 +113,7 @@ def main(quick=False):
     print(f"\n[C] Solving placement (N={N_SENSORS} sensors)...")
 
     results = {}
+    qaoa_stats = {}
 
     # 1. Greedy
     chosen_g, obj_g = greedy_coverage(viewsheds, weights, N_SENSORS)
@@ -84,6 +146,13 @@ def main(quick=False):
                 r = run_qaoa(viewsheds, weights, N_SENSORS, p_layers=2, mode=mode)
                 if r["chosen"]:
                     results[label] = (r["chosen"], r["objective"])
+                    qaoa_stats[label] = dict(
+                        shots=r["shots"],
+                        p_optimal=round(r["p_optimal"], 4),
+                        p_optimal_random=round(r["p_optimal_random"], 4),
+                        p_feasible=round(r["p_feasible"], 4),
+                        mean_ratio=round(r["mean_ratio"], 4),
+                    )
                 print(f"    {label}: best shot {r['objective']:.4f}  "
                       f"P(optimal)={r['p_optimal']:.4f} "
                       f"(random placement {r['p_optimal_random']:.4f})  "
@@ -123,6 +192,9 @@ def main(quick=False):
                           out_path=f"{OUT}/placement_map.png")
     plot_folium_map(surf, sites, results["Greedy"][0], viewsheds,
                     out_path=f"{OUT}/placement_map.html")
+
+    path = write_results_json(surf, sites, viewsheds, weights, results, N_SENSORS, GRID, qaoa_stats)
+    print(f"    Saved {os.path.relpath(path, OUT)} (dashboard data)")
 
     print("\n[Done] Output files:")
     for f in ["priority_surface.png", "placement_map.png", "placement_map.html"]:

@@ -276,7 +276,7 @@ def write_csv(all_results: list[dict], instance_labels: list[str]):
         w.writerow(header)
         for label, r in zip(instance_labels, all_results):
             get = lambda m, k: r.get(m, {}).get(k, 0.0)
-            w.writerow([label, f"{r['ilp_obj']:.4f}"] + [f"{v:.4f}" for v in (
+            w.writerow([label, f"{r['ilp_obj']:.4f}"] + [f"{v:.6f}" for v in (
                 get("Greedy (CELF)", "ratio"), get("Simulated Annealing", "ratio"),
                 get("Random placement", "ratio"), get("QAOA", "ratio"), get("XY-QAOA", "ratio"),
                 get("WSXY start", "ratio"), get("WSXY-QAOA", "ratio"),
