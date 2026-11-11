@@ -1,0 +1,38 @@
+{
+  "A: plain QAOA, fixed cost, 1 layer": {
+    "mode": "plain",
+    "layers": 1,
+    "params": [
+      -0.6094735261753473,
+      0.35917148846352825
+    ],
+    "p_feasible": 0.35635,
+    "p_optimal": 0.012775,
+    "mean_ratio": 0.2396118510714953,
+    "cz": 83,
+    "depth": 109
+  },
+  "B: XY-QAOA (Dicke start), 1 layer": {
+    "mode": "xy",
+    "layers": 1,
+    "params": [
+      1.5854006766217026,
+      2.584854111127254
+    ],
+    "p_feasible": 0.310175,
+    "p_optimal": 0.018775,
+    "mean_ratio": 0.21761166541780172,
+    "cz": 194,
+    "depth": 314
+  },
+  "C: Dicke state only, no QAOA layer": {
+    "mode": "xy",
+    "layers": 0,
+    "params": [],
+    "p_feasible": 0.3683,
+    "p_optimal": 0.012675,
+    "mean_ratio": 0.24277877821239083,
+    "cz": 124,
+    "depth": 243
+  }
+}

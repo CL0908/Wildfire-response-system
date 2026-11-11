@@ -1,0 +1,43 @@
+{
+ "instance": {
+  "n_sites": 8,
+  "n_sensors": 2,
+  "seed": 42,
+  "terrain": "synthetic",
+  "n_placements": 28
+ },
+ "baselines": {
+  "uniform_bitstrings": {
+   "p_feasible": 0.1094,
+   "p_optimal": 0.0039,
+   "mean_ratio": 0.0729
+  },
+  "random_placement": {
+   "p_feasible": 1.0,
+   "p_optimal": 0.0357,
+   "mean_ratio": 0.6665
+  }
+ },
+ "runs": [
+  {
+   "id": "iqm_garnet_2026-06-01",
+   "device": "IQM Garnet (20 qubits)",
+   "access": "AWS Braket through qBraid",
+   "date": "2026-06-01",
+   "circuit": "Plain QAOA, 2 layers, original cost function",
+   "note": "Run with the original cost function, which double-counts overlapping coverage and uses gate angles of up to 344 full turns.",
+   "shots": 2000,
+   "optimal_shots": 10,
+   "measured": {
+    "p_feasible": 0.2245,
+    "p_optimal": 0.005,
+    "mean_ratio": 0.145
+   },
+   "noiseless": {
+    "p_feasible": 0.169,
+    "p_optimal": 0.0,
+    "mean_ratio": 0.1036
+   }
+  }
+ ]
+}
