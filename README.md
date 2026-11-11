@@ -22,11 +22,19 @@ Covered priority as a fraction of the ILP optimum. Greedy and simulated annealin
 
 "WSXY start" is the warm-start state measured before any QAOA layer is applied.
 
-There is no quantum advantage here. On every instance the placement from greedy or simulated annealing beats the expected QAOA shot, and the ILP solves every instance exactly. Plain QAOA does worse than random placement because more than half its shots place the wrong number of sensors. XY-QAOA does better than random (it measures an optimal placement 6 to 16 times as often) but its expected shot stays below both classical methods. WSXY-QAOA scores lowest: its warm-start state puts only 17 to 25% of shots on exactly N sensors, the XY mixer cannot change that share, and the circuit adds about one percentage point over the starting state. The instances are also small enough, at 28 to 220 possible placements, that 2,000 shots from any of these distributions found the optimum, so "best shot" figures say nothing about the circuit.
+There is no quantum advantage here. On every instance the placement from greedy or simulated annealing beats the expected QAOA shot, and the ILP solves every instance exactly. Plain QAOA does worse than random placement because more than half its shots place the wrong number of sensors. XY-QAOA does better than random (it measures an optimal placement 6 to 16 times as often) but its expected shot stays below both classical methods. WSXY-QAOA scores lowest: its warm-start state puts only 17 to 25% of shots on exactly N sensors, the XY mixer cannot change that share, and the circuit adds just over one percentage point to the starting state. Most of that is the warm-start clipping (`warm_eps`, 0.25 here): at 0.05, 58 to 69% of shots have N sensors and the expected shot scores 0.58 to 0.68, which is still at or below random placement. The instances are also small enough, at 28 to 220 possible placements, that 2,000 shots from any of these distributions found the optimum, so "best shot" figures say nothing about the circuit.
 
 Limits of the QAOA results: they come from a noiseless simulator that applies the exact coverage objective as a phase, which is not a shallow circuit on real hardware. `solvers/qaoa_hardware.py` uses a two-qubit approximation of the objective instead and classically repairs each shot; no hardware results are included in this repo.
 
-Also in the repo: `dashboards/` (a React front end; its source files are incomplete, so it does not build yet), `ranger_reponse/` (a Moving Firefighter Problem implementation for ranger response, which needs two external modules that are not included), and `solvers/qaoa_hardware.py` (a script for running QAOA on IBM quantum hardware, or IQM hardware through qBraid).
+## Dashboard
+
+`dashboards/` is a single-page React view of one pipeline run: the priority, hazard, ecological value and elevation layers, the candidate sites, and each method's placement and coverage, with the benchmark table underneath. `python main.py` writes its data to `dashboards/public/results.json`; nothing in it is mocked and nothing is live. See `dashboards/README.md`.
+
+## Ranger response
+
+`ranger_response/` plans where a ranger crew should cut firebreaks, and in what order, once a fire is detected. It is a classical planner modelled on the Moving Firefighter Problem: fire spreads cell to cell through fuel, the crew takes time to travel, and a firebreak only holds if it is finished before the fire arrives. On the default case one crew's six firebreaks cut the burned area from 230 cells to 42. See `ranger_response/README.md` for the model and its simplifications.
+
+Also in the repo: `solvers/qaoa_hardware.py`, a script for running QAOA on IBM quantum hardware, or IQM hardware through qBraid.
 
 ## Run
 
@@ -35,5 +43,6 @@ pip install -r requirements.txt
 python main.py           # full pipeline on a 20 × 20 grid
 python main.py --quick   # 15 × 15 grid (7.5 km), skips QAOA
 python benchmark.py      # the three benchmark instances
-python -m pytest tests   # checks the QUBO and QAOA against brute force (pip install pytest)
+python -m ranger_response.run   # ranger response plan for the default fire
+python -m pytest tests   # checks the solvers against brute force (pip install pytest)
 ```
