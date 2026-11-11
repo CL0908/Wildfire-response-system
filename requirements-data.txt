@@ -1,0 +1,2 @@
+# Only needed to regenerate data/ with data/fetch_khao_yai.py (in addition to requirements.txt)
+rasterio>=1.3

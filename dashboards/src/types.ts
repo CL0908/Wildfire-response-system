@@ -4,9 +4,22 @@ export interface Grid {
   cell_size_m: number
 }
 
-export type LayerKey = 'priority' | 'hazard' | 'value' | 'elevation_m'
+export type CoreLayerKey = 'priority' | 'hazard' | 'value' | 'elevation_m'
 
-export type Layers = Record<LayerKey, number[][]>
+/** Only present in results.json when the terrain is real. */
+export type OptionalLayerKey = 'inside_park' | 'fire_count'
+
+export type LayerKey = CoreLayerKey | OptionalLayerKey
+
+export type Layers = Record<CoreLayerKey, number[][]> &
+  Partial<Record<OptionalLayerKey, number[][]>>
+
+export interface Bounds {
+  north: number
+  south: number
+  west: number
+  east: number
+}
 
 export interface Site {
   id: number
@@ -44,12 +57,20 @@ export interface BenchmarkRow {
   xy_qaoa_mean: string
   wsxy_start_mean: string
   wsxy_qaoa_mean: string
-  [column: string]: string
+  /** Present once rows are averages over several instances of one size. */
+  n_instances?: string
+  terrain?: string
+  /** `<column>_std` holds the standard deviation of a mean column. */
+  [column: string]: string | undefined
 }
 
 export interface Results {
   generated: string
-  terrain: string
+  terrain: 'real' | 'synthetic'
+  /** `sources`, `modelled` and `bounds` are only present when terrain is real. */
+  sources?: string[]
+  modelled?: string
+  bounds?: Bounds
   grid: Grid
   mast_height_m: number
   range_m: number

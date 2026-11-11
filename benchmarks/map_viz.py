@@ -3,7 +3,8 @@ Step E: Visualize priority heatmap, candidate sites, chosen sensors, and viewshe
 
 Produces:
   - static matplotlib figure (placement_map.png)
-  - interactive folium HTML map (placement_map.html) with real Khao Yai coordinates
+  - interactive folium HTML map (placement_map.html); real terrain is drawn at its true
+    coordinates, synthetic terrain in an illustrative box
 """
 
 import sys, os
@@ -16,18 +17,32 @@ from matplotlib.patches import Circle
 from mpl_toolkits.mplot3d import Axes3D   # noqa: F401 – registers the 3-D projection
 
 
-# Khao Yai approximate bounding box
+# Where synthetic terrain is drawn on the web map. It has no real location, so this
+# box is only illustrative; real terrain carries its own coordinates.
 KY_LAT_MIN, KY_LAT_MAX = 14.25, 14.55
 KY_LON_MIN, KY_LON_MAX = 101.35, 101.55
-KY_CENTER = (14.44, 101.43)
 
 
-def cell_to_latlon(r, c, grid_shape):
-    """Map grid (r,c) → approximate (lat, lon) within Khao Yai bounds."""
-    rows, cols = grid_shape
-    lat = KY_LAT_MAX - (r / rows) * (KY_LAT_MAX - KY_LAT_MIN)
-    lon = KY_LON_MIN + (c / cols) * (KY_LON_MAX - KY_LON_MIN)
-    return lat, lon
+def cell_bounds(surf, r, c):
+    """[[south, west], [north, east]] of grid cell (r, c)."""
+    rows, cols = surf["grid_shape"]
+    if surf.get("source") == "real":
+        lat, lon = surf["lat"], surf["lon"]
+        dlat = abs(float(lat[0, 0] - lat[1, 0])) if rows > 1 else 500 / 110574
+        dlon = abs(float(lon[0, 1] - lon[0, 0])) if cols > 1 else 500 / 107800
+        return [[float(lat[r, c]) - dlat / 2, float(lon[r, c]) - dlon / 2],
+                [float(lat[r, c]) + dlat / 2, float(lon[r, c]) + dlon / 2]]
+    dlat = (KY_LAT_MAX - KY_LAT_MIN) / rows
+    dlon = (KY_LON_MAX - KY_LON_MIN) / cols
+    north = KY_LAT_MAX - r * dlat
+    west = KY_LON_MIN + c * dlon
+    return [[north - dlat, west], [north, west + dlon]]
+
+
+def cell_to_latlon(r, c, grid_shape, surf=None):
+    """Centre (lat, lon) of grid cell (r, c)."""
+    (south, west), (north, east) = cell_bounds(surf or {"grid_shape": grid_shape}, r, c)
+    return (south + north) / 2, (west + east) / 2
 
 
 def plot_placement_static(
@@ -104,7 +119,7 @@ def plot_placement_static(
     )
     ax.set_xlabel("Column (×500 m)"); ax.set_ylabel("Row (×500 m)")
 
-    plt.suptitle("QPreFire — Khao Yai Sensor Placement (500 m cells, 4 km range)",
+    plt.suptitle("Q-Pithak: Khao Yai sensor placement (500 m cells, 4 km range)",
                  fontsize=12)
     plt.tight_layout()
     plt.savefig(out_path, dpi=130)
@@ -121,7 +136,6 @@ def plot_folium_map(
 ):
     try:
         import folium
-        from folium.plugins import HeatMap
     except ImportError:
         print("folium not installed — skipping HTML map")
         return
@@ -129,47 +143,51 @@ def plot_folium_map(
     grid_shape = surf["grid_shape"]
     rows, cols = grid_shape
     priority = surf["priority"]
+    real = surf.get("source") == "real"
 
-    m = folium.Map(location=KY_CENTER, zoom_start=11,
-                   tiles="CartoDB positron")
+    (south, west), _ = cell_bounds(surf, rows - 1, 0)
+    _, (north, east) = cell_bounds(surf, 0, cols - 1)
+    m = folium.Map(location=[(south + north) / 2, (west + east) / 2], zoom_start=13,
+                   tiles="OpenStreetMap")
 
-    # Priority heatmap
-    heat_data = []
+    # Priority, one rectangle per cell
+    cmap = plt.get_cmap("YlOrRd")
+    layer = folium.FeatureGroup(name="Priority (hazard × value)")
     for r in range(rows):
         for c in range(cols):
-            if priority[r, c] > 0.1:
-                lat, lon = cell_to_latlon(r, c, grid_shape)
-                heat_data.append([lat, lon, float(priority[r, c])])
-    HeatMap(heat_data, radius=18, blur=15, max_zoom=13,
-            gradient={"0.3": "yellow", "0.6": "orange", "1.0": "red"}).add_to(m)
+            p = float(priority[r, c])
+            folium.Rectangle(
+                bounds=cell_bounds(surf, r, c), stroke=False, fill=True,
+                fill_color=mcolors.to_hex(cmap(p)), fill_opacity=0.15 + 0.45 * p,
+                tooltip=f"row {r}, col {c}: priority {p:.2f}",
+            ).add_to(layer)
+    layer.add_to(m)
 
-    # Candidate sites
+    # Candidate sites, and each chosen sensor's viewshed as the cells it sees
     for i, (r, c) in enumerate(sites):
-        lat, lon = cell_to_latlon(r, c, grid_shape)
+        lat, lon = cell_to_latlon(r, c, grid_shape, surf)
         if i in chosen:
-            folium.Marker(
-                [lat, lon],
-                icon=folium.Icon(color="blue", icon="tower", prefix="fa"),
-                tooltip=f"Sensor S{chosen.index(i)+1} (site {i})",
-            ).add_to(m)
-            # viewshed polygon (convex hull of visible cells)
-            vs_latlons = []
-            for cell in viewsheds.get(i, set()):
+            label = f"Sensor S{chosen.index(i)+1} (site {i})"
+            seen = folium.FeatureGroup(name=f"Viewshed of {label}")
+            for cell in sorted(viewsheds.get(i, set())):
                 vr, vc = divmod(cell, cols)
-                vs_latlons.append(cell_to_latlon(vr, vc, grid_shape))
-            if vs_latlons:
-                folium.PolyLine(vs_latlons[:50], color="blue", weight=0.3, opacity=0.3).add_to(m)
+                folium.Rectangle(bounds=cell_bounds(surf, vr, vc), color="#1a6dd4", weight=1,
+                                 fill=True, fill_opacity=0.12).add_to(seen)
+            seen.add_to(m)
+            folium.Marker([lat, lon], icon=folium.Icon(color="blue", icon="tower", prefix="fa"),
+                          tooltip=label).add_to(m)
         else:
             folium.CircleMarker(
                 [lat, lon], radius=3, color="gray", fill=True, fill_opacity=0.5,
                 tooltip=f"Candidate {i}",
             ).add_to(m)
 
-    # Khao Yai boundary (approximate rectangle)
     folium.Rectangle(
-        bounds=[[KY_LAT_MIN, KY_LON_MIN], [KY_LAT_MAX, KY_LON_MAX]],
-        color="green", weight=2, fill=False, tooltip="Khao Yai NP (approx)"
+        bounds=[[south, west], [north, east]], color="green", weight=2, fill=False,
+        tooltip=("Study window, real terrain" if real
+                 else "Synthetic terrain: position on the map is illustrative only"),
     ).add_to(m)
+    folium.LayerControl(collapsed=False).add_to(m)
 
     m.save(out_path)
     print(f"Saved {out_path}")

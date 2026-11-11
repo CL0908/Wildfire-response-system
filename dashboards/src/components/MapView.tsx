@@ -1,6 +1,14 @@
 import { useMemo, useState } from 'react'
 import { rampColor } from '../lib/color'
-import { LAYERS, formatLayerValue, layerRange } from '../lib/layers'
+import {
+  LAYERS,
+  NO_FIRE_FILL,
+  availableLayers,
+  cellFill,
+  formatLayerValue,
+  layerRange,
+  legendT,
+} from '../lib/layers'
 import type { LayerKey, Method, Results } from '../types'
 
 const CELL = 20
@@ -19,6 +27,7 @@ export default function MapView({ results, layer, method }: Props) {
   const [activeSite, setActiveSite] = useState<number | null>(null)
 
   const info = LAYERS.find((l) => l.key === layer)!
+  const shownLayers = useMemo(() => availableLayers(layers), [layers])
   const [lo, hi] = useMemo(() => layerRange(layers, layer), [layers, layer])
   const covered = useMemo(() => new Set(method.covered_cells), [method])
   const chosen = useMemo(() => new Set(method.chosen), [method])
@@ -29,19 +38,18 @@ export default function MapView({ results, layer, method }: Props) {
 
   const cells = useMemo(() => {
     const out: { idx: number; r: number; c: number; fill: string }[] = []
-    const span = hi - lo || 1
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         out.push({
           idx: r * cols + c,
           r,
           c,
-          fill: rampColor((layers[layer][r][c] - lo) / span),
+          fill: cellFill(info, layers[layer]![r][c], lo, hi),
         })
       }
     }
     return out
-  }, [layers, layer, lo, hi, rows, cols])
+  }, [layers, layer, info, lo, hi, rows, cols])
 
   const activeSiteInfo = sites.find((s) => s.id === activeSite) ?? null
   const shownCell =
@@ -212,7 +220,9 @@ export default function MapView({ results, layer, method }: Props) {
               {covered.has(shownCell) ? 'covered' : 'not covered'} by {method.name}
             </div>
             <div className="muted">
-              {LAYERS.map((l) => `${l.label} ${formatLayerValue(l, layers[l.key][sr][sc])}`).join(' · ')}
+              {shownLayers
+                .map((l) => `${l.label} ${formatLayerValue(l, layers[l.key]![sr][sc])}`)
+                .join(' · ')}
             </div>
             {activeSiteInfo && <div>{siteSummary(activeSiteInfo.id)}</div>}
           </>
@@ -222,13 +232,26 @@ export default function MapView({ results, layer, method }: Props) {
       <div className="legends">
         <div className="legend">
           <span className="legend-title">{info.label}</span>
-          <span className="muted">{formatLayerValue(info, lo)}</span>
+          {info.scale === 'fires' && (
+            <>
+              <span className="ramp" aria-hidden="true">
+                <i style={{ background: NO_FIRE_FILL }} />
+              </span>
+              <span className="muted">0</span>
+            </>
+          )}
+          <span className="muted">
+            {formatLayerValue(info, info.scale === 'fires' ? Math.min(1, hi) : lo)}
+          </span>
           <span className="ramp" aria-hidden="true">
             {Array.from({ length: LEGEND_STEPS }, (_, i) => (
-              <i key={i} style={{ background: rampColor(i / (LEGEND_STEPS - 1)) }} />
+              <i key={i} style={{ background: rampColor(legendT(info, i, LEGEND_STEPS)) }} />
             ))}
           </span>
-          <span className="muted">{formatLayerValue(info, hi)}</span>
+          <span className="muted">
+            {formatLayerValue(info, hi)}
+            {info.scale === 'fires' ? ' detections' : ''}
+          </span>
         </div>
         <ul className="key" aria-label="Overlay key">
           <li>

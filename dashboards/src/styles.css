@@ -26,6 +26,7 @@ body {
 
 h1,
 h2,
+h3,
 p,
 dl,
 dd,
@@ -93,29 +94,34 @@ ul {
   border: 0;
 }
 
-/* Segmented control */
+/* Segmented control: equal-width grid, 1px gaps draw the dividers */
 .segmented {
-  display: inline-flex;
-  align-self: flex-start;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  max-width: 620px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--line);
   overflow: hidden;
 }
 
 .segmented label {
   position: relative;
   cursor: pointer;
+  min-width: 0;
 }
 
-.segmented label + label {
-  border-left: 1px solid var(--line);
+.segmented label.wide {
+  grid-column: 1 / -1;
 }
 
 .segmented span {
   display: block;
-  padding: 7px 14px;
+  height: 100%;
+  padding: 7px 10px;
+  text-align: center;
+  background: var(--surface);
 }
 
 .segmented input:checked + span {
@@ -309,13 +315,17 @@ ul {
 }
 
 /* Benchmark */
-.benchmark {
+.benchmark,
+.data,
+.hardware {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.benchmark h2 {
+.benchmark h2,
+.data h2,
+.hardware h2 {
   font-size: 1.1rem;
   font-weight: 650;
 }
@@ -360,6 +370,58 @@ thead th.num {
 tbody th {
   font-weight: 500;
   text-align: left;
+}
+
+/* Mean and "± std" sit on one line when there is room and stack when there is not. */
+td.has-std {
+  white-space: normal;
+}
+
+.pm {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+/* Data block */
+.data {
+  margin-top: 8px;
+  font-size: 0.9rem;
+}
+
+.data-list,
+.attribution {
+  padding-left: 18px;
+}
+
+.attribution {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.attribution li + li {
+  margin-top: 4px;
+}
+
+/* Hardware run */
+.run {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.run h3 {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.hw-table thead th {
+  vertical-align: bottom;
+}
+
+.hw-table td,
+.hw-table tbody th {
+  white-space: normal;
 }
 
 .error {

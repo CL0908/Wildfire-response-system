@@ -1,0 +1,434 @@
+{
+  "description": "500 m cell aggregates of real geodata for a 20 km x 20 km region of Khao Yai National Park, Thailand. Only derived aggregates are stored.",
+  "access_date": "12 November 2026",
+  "region_bounds_deg": {
+    "north": 14.479641,
+    "south": 14.298767,
+    "west": 101.108157,
+    "east": 101.293586
+  },
+  "cell_size_m": 500.0,
+  "cell_size_deg": {
+    "lat": 0.004521858664785573,
+    "lon": 0.0046357089801851645,
+    "lat0_for_lon_scale": 14.325949999999999,
+    "metres_per_deg_lat": 110574.0,
+    "metres_per_deg_lon": 107858.36689429724
+  },
+  "grid_shape": [
+    40,
+    40
+  ],
+  "orientation": "row 0 is the north edge, column 0 is the west edge; lat decreases with row, lon increases with column; lat/lon are cell centres",
+  "default_window": {
+    "row0": 15,
+    "col0": 3,
+    "n_rows": 20,
+    "n_cols": 20,
+    "north": 14.411813,
+    "south": 14.321376,
+    "west": 101.122064,
+    "east": 101.214778,
+    "offset_in_region": [
+      15,
+      3
+    ]
+  },
+  "selection": {
+    "rule": "window of 40 x 40 cells with the highest total filtered fire-detection count (2012 to 2025) among windows where the share of cells with inside_park > 0.5 is at least the threshold; threshold relaxed in 10-point steps if no window qualifies; ties go to the first window in row-major order",
+    "search_grid": {
+      "rows": 118,
+      "cols": 174,
+      "north": 14.592687,
+      "west": 101.108157,
+      "margin_m": 2000.0,
+      "region_offset_row_col": [
+        25,
+        0
+      ]
+    },
+    "region_threshold_pct_used": 60,
+    "region_share_cells_inside": 0.675625,
+    "region_windows_meeting_threshold": 6718,
+    "region_fire_total": 1017,
+    "default_window_rule": "same rule for 20 x 20 cells inside the region",
+    "default_window_threshold_pct_used": 60,
+    "default_window_share_cells_inside": 0.6275,
+    "default_window_fire_total": 628
+  },
+  "sources": {
+    "elevation": {
+      "name": "Copernicus DEM GLO-30 (DSM, COG, 1 arc-second)",
+      "url": "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/Copernicus_DSM_COG_10_N14_00_E101_00_DEM/Copernicus_DSM_COG_10_N14_00_E101_00_DEM.tif",
+      "licence": "Copernicus DEM licence (free of charge, incl. commercial use, with attribution)",
+      "attribution": "produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved",
+      "processing": "window read over HTTP; mean and max of the pixels whose centre is in each cell"
+    },
+    "fire": {
+      "name": "NASA FIRMS VIIRS S-NPP 375 m, yearly Thailand CSVs, 2012 to 2025",
+      "url": "https://firms.modaps.eosdis.nasa.gov/data/country/viirs-snpp/{y}/viirs-snpp_{y}_Thailand.csv",
+      "licence": "NASA open data policy; free to use with acknowledgement",
+      "attribution": "We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Earth Science Data and Information System (ESDIS).",
+      "filter": "confidence in {n, h} and type == 0 (presumed vegetation fire); if a year's file lacks a usable type column all n/h rows are kept (see per_year)",
+      "per_year_file_stats": {
+        "2012": {
+          "rows_in_file": 165440,
+          "rows_in_grid_extent": 682,
+          "rows_confidence_n_or_h": 615,
+          "rows_kept": 615,
+          "type_filter_applied": true
+        },
+        "2013": {
+          "rows_in_file": 197060,
+          "rows_in_grid_extent": 872,
+          "rows_confidence_n_or_h": 779,
+          "rows_kept": 779,
+          "type_filter_applied": true
+        },
+        "2014": {
+          "rows_in_file": 199652,
+          "rows_in_grid_extent": 1077,
+          "rows_confidence_n_or_h": 973,
+          "rows_kept": 973,
+          "type_filter_applied": true
+        },
+        "2015": {
+          "rows_in_file": 190585,
+          "rows_in_grid_extent": 944,
+          "rows_confidence_n_or_h": 839,
+          "rows_kept": 839,
+          "type_filter_applied": true
+        },
+        "2016": {
+          "rows_in_file": 237372,
+          "rows_in_grid_extent": 1563,
+          "rows_confidence_n_or_h": 1376,
+          "rows_kept": 1374,
+          "type_filter_applied": true
+        },
+        "2017": {
+          "rows_in_file": 132768,
+          "rows_in_grid_extent": 752,
+          "rows_confidence_n_or_h": 686,
+          "rows_kept": 686,
+          "type_filter_applied": true
+        },
+        "2018": {
+          "rows_in_file": 117081,
+          "rows_in_grid_extent": 589,
+          "rows_confidence_n_or_h": 544,
+          "rows_kept": 544,
+          "type_filter_applied": true
+        },
+        "2019": {
+          "rows_in_file": 235482,
+          "rows_in_grid_extent": 975,
+          "rows_confidence_n_or_h": 895,
+          "rows_kept": 895,
+          "type_filter_applied": true
+        },
+        "2020": {
+          "rows_in_file": 221248,
+          "rows_in_grid_extent": 1876,
+          "rows_confidence_n_or_h": 1747,
+          "rows_kept": 1746,
+          "type_filter_applied": true
+        },
+        "2021": {
+          "rows_in_file": 113225,
+          "rows_in_grid_extent": 675,
+          "rows_confidence_n_or_h": 627,
+          "rows_kept": 627,
+          "type_filter_applied": true
+        },
+        "2022": {
+          "rows_in_file": 54784,
+          "rows_in_grid_extent": 464,
+          "rows_confidence_n_or_h": 436,
+          "rows_kept": 436,
+          "type_filter_applied": true
+        },
+        "2023": {
+          "rows_in_file": 180567,
+          "rows_in_grid_extent": 935,
+          "rows_confidence_n_or_h": 854,
+          "rows_kept": 854,
+          "type_filter_applied": true
+        },
+        "2024": {
+          "rows_in_file": 143538,
+          "rows_in_grid_extent": 779,
+          "rows_confidence_n_or_h": 700,
+          "rows_kept": 699,
+          "type_filter_applied": true
+        },
+        "2025": {
+          "rows_in_file": 103794,
+          "rows_in_grid_extent": 614,
+          "rows_confidence_n_or_h": 573,
+          "rows_kept": 573,
+          "type_filter_applied": true
+        }
+      },
+      "per_year_detections_in_region": {
+        "2012": 30,
+        "2013": 29,
+        "2014": 82,
+        "2015": 24,
+        "2016": 223,
+        "2017": 13,
+        "2018": 4,
+        "2019": 26,
+        "2020": 416,
+        "2021": 5,
+        "2022": 3,
+        "2023": 152,
+        "2024": 7,
+        "2025": 3
+      },
+      "per_year_detections_in_park_bbox": {
+        "2012": 472,
+        "2013": 573,
+        "2014": 746,
+        "2015": 601,
+        "2016": 1103,
+        "2017": 507,
+        "2018": 414,
+        "2019": 675,
+        "2020": 1409,
+        "2021": 507,
+        "2022": 347,
+        "2023": 705,
+        "2024": 531,
+        "2025": 404
+      }
+    },
+    "landcover": {
+      "name": "ESA WorldCover 10 m 2021 v200",
+      "url": "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N12E099_Map.tif",
+      "licence": "CC BY 4.0",
+      "attribution": "© ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium",
+      "citation": "Zanaga et al. 2022, doi 10.5281/zenodo.7254221",
+      "processing": "window read over HTTP; fraction of pixels per class in each cell; classes 10 tree, 20 shrub, 30 grass, 40 crop, 50 built, 60 bare, 80 water, 90 wetland, anything else (incl. 0 no data) in lc_other"
+    },
+    "park_boundary": {
+      "name": "OpenStreetMap relation 2971358",
+      "url": "https://polygons.openstreetmap.fr/get_geojson.py?id=2971358&params=0",
+      "licence": "ODbL 1.0",
+      "attribution": "© OpenStreetMap contributors",
+      "licence_url": "https://www.openstreetmap.org/copyright",
+      "processing": "inside_park = share of a 5 x 5 grid of points per cell inside the polygon (even-odd over all rings, so holes are excluded)"
+    }
+  },
+  "array_stats": {
+    "dem_m": {
+      "min": 21.520037,
+      "mean": 385.253048,
+      "max": 1030.049438
+    },
+    "dem_max_m": {
+      "min": 28.336864,
+      "mean": 460.596366,
+      "max": 1086.618408
+    },
+    "fire_count": {
+      "min": 0.0,
+      "mean": 0.635625,
+      "max": 11.0
+    },
+    "fire_years": {
+      "min": 0.0,
+      "mean": 0.4675,
+      "max": 6.0
+    },
+    "lc_tree": {
+      "min": 0.0,
+      "mean": 0.953986,
+      "max": 1.0
+    },
+    "lc_shrub": {
+      "min": 0.0,
+      "mean": 0.000186,
+      "max": 0.059193
+    },
+    "lc_grass": {
+      "min": 0.0,
+      "mean": 0.015516,
+      "max": 0.64026
+    },
+    "lc_crop": {
+      "min": 0.0,
+      "mean": 0.020934,
+      "max": 0.69709
+    },
+    "lc_built": {
+      "min": 0.0,
+      "mean": 0.005504,
+      "max": 0.599868
+    },
+    "lc_bare": {
+      "min": 0.0,
+      "mean": 0.000423,
+      "max": 0.079669
+    },
+    "lc_water": {
+      "min": 0.0,
+      "mean": 0.003451,
+      "max": 0.754299
+    },
+    "lc_wetland": {
+      "min": 0.0,
+      "mean": 1e-06,
+      "max": 0.000331
+    },
+    "lc_other": {
+      "min": 0.0,
+      "mean": 0.0,
+      "max": 0.0
+    },
+    "inside_park": {
+      "min": 0.0,
+      "mean": 0.6739,
+      "max": 1.0
+    },
+    "lat": {
+      "min": 14.301028,
+      "mean": 14.389204,
+      "max": 14.47738
+    },
+    "lon": {
+      "min": 101.110475,
+      "mean": 101.200871,
+      "max": 101.291268
+    }
+  },
+  "sanity_checks": {
+    "dem_min_max_m": [
+      21.520036697387695,
+      1086.618408203125
+    ],
+    "dem_min_pixels_per_cell": 256,
+    "orientation": {
+      "lat_decreases_with_row": true,
+      "lon_increases_with_col": true,
+      "spot_checks": [
+        {
+          "row": 0,
+          "col": 0,
+          "raw_pixel_m": 152.0,
+          "cell_mean_m": 161.3
+        },
+        {
+          "row": 0,
+          "col": 39,
+          "raw_pixel_m": 989.0,
+          "cell_mean_m": 982.1
+        },
+        {
+          "row": 39,
+          "col": 0,
+          "raw_pixel_m": 19.8,
+          "cell_mean_m": 21.5
+        },
+        {
+          "row": 39,
+          "col": 39,
+          "raw_pixel_m": 32.3,
+          "cell_mean_m": 46.6
+        },
+        {
+          "row": 20,
+          "col": 20,
+          "raw_pixel_m": 635.6,
+          "cell_mean_m": 665.0
+        },
+        {
+          "row": 34,
+          "col": 25,
+          "raw_pixel_m": 208.3,
+          "cell_mean_m": 191.6
+        },
+        {
+          "row": 20,
+          "col": 10,
+          "raw_pixel_m": 188.7,
+          "cell_mean_m": 156.2
+        },
+        {
+          "row": 12,
+          "col": 1,
+          "raw_pixel_m": 52.5,
+          "cell_mean_m": 51.9
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "raw_pixel_m": 217.5,
+          "cell_mean_m": 184.1
+        },
+        {
+          "row": 7,
+          "col": 32,
+          "raw_pixel_m": 830.3,
+          "cell_mean_m": 836.3
+        }
+      ],
+      "max_abs_diff_spot_m": 33.4,
+      "corr_raw_centre_pixel_vs_cell_mean": 0.99765,
+      "corr_if_array_flipped_north_south": 0.11886
+    },
+    "khao_rom_check": {
+      "max_within_1000m": {
+        "dem_m": 1276.9,
+        "lat": 14.36222,
+        "lon": 101.39528
+      },
+      "max_within_3000m": {
+        "dem_m": 1353.2,
+        "lat": 14.38333,
+        "lon": 101.42222
+      },
+      "value_at_point_m": 1043.7
+    },
+    "lc_fraction_sum_min_max": [
+      0.9999999608262442,
+      1.000000036030542
+    ],
+    "lc_pixels_per_cell_min_max": [
+      2970,
+      3080
+    ],
+    "lc_nodata_pixel_share": 0.0,
+    "lc_region_shares": {
+      "lc_tree": 0.954,
+      "lc_shrub": 0.0002,
+      "lc_grass": 0.0155,
+      "lc_crop": 0.0209,
+      "lc_built": 0.0055,
+      "lc_bare": 0.0004,
+      "lc_water": 0.0035,
+      "lc_wetland": 0.0,
+      "lc_other": 0.0
+    },
+    "fire_total_region": 1017,
+    "fire_cells_zero": 1107,
+    "fire_per_year_park_bbox": {
+      "2012": 472,
+      "2013": 573,
+      "2014": 746,
+      "2015": 601,
+      "2016": 1103,
+      "2017": 507,
+      "2018": 414,
+      "2019": 675,
+      "2020": 1409,
+      "2021": 507,
+      "2022": 347,
+      "2023": 705,
+      "2024": 531,
+      "2025": 404
+    },
+    "inside_cells_gt_0.5_share": 0.675625,
+    "inside_mean_fraction": 0.6739000082015991
+  }
+}

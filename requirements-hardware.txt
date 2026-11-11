@@ -1,0 +1,4 @@
+# Only for solvers/qaoa_hardware.py and solvers/check.py (real hardware runs)
+-r requirements.txt
+qiskit-ibm-runtime>=0.20
+qbraid>=0.8

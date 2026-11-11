@@ -1,15 +1,17 @@
 """
-QPreFire — Static Sensor Placement Optimizer for Khao Yai National Park.
+Q-Pithak: static sensor placement optimiser for Khao Yai National Park.
 Run this file to execute the full pipeline: Steps A→E.
 
 Usage:
-    python main.py [--quick]      # --quick skips QAOA and uses grid=15
+    python main.py [--quick] [--terrain {real,synthetic}]
+        --quick skips QAOA and uses grid=15; --terrain defaults to real
+        (the committed extract of real geodata, data/khao_yai_500m.npz)
 """
 
 import sys, os, argparse
 sys.path.insert(0, os.path.dirname(__file__))
 
-from priority_surface import build_priority_surface
+from priority_surface import build_priority_surface, real_window_bounds
 from viewshed import generate_candidate_sites, compute_viewsheds, coverage_overlap_stats
 from solvers.greedy import greedy_coverage
 from solvers.ilp import ilp_coverage
@@ -54,9 +56,10 @@ def write_results_json(surf, sites, viewsheds, weights, results, n_sensors, grid
         with open(csv_path, newline="") as f:
             benchmark = list(csv.DictReader(f))
 
+    real = surf.get("source") == "real"
     data = dict(
         generated=date.today().isoformat(),
-        terrain="synthetic",
+        terrain="real" if real else "synthetic",
         grid=dict(rows=grid, cols=grid, cell_size_m=CELL_SIZE_M),
         mast_height_m=MAST_HEIGHT_M,
         range_m=MAX_RANGE_M,
@@ -74,25 +77,38 @@ def write_results_json(surf, sites, viewsheds, weights, results, n_sensors, grid
         methods=methods,
         benchmark=benchmark,
     )
+    if real:
+        data["sources"] = [
+            "Elevation: Copernicus DEM GLO-30",
+            "Fire detections 2012 to 2025: NASA FIRMS VIIRS S-NPP",
+            "Land cover 2021: ESA WorldCover",
+            "Park boundary: OpenStreetMap contributors",
+        ]
+        data["modelled"] = ("Hazard and value are weighted combinations of these layers; "
+                            "the weights are modelling assumptions.")
+        data["bounds"] = real_window_bounds(surf)
+        data["layers"]["inside_park"] = grid_list(surf["inside_park"], 3)
+        data["layers"]["fire_count"] = [[int(v) for v in row] for row in surf["fire_count"]]
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         json.dump(data, f, separators=(",", ":"))
     return path
 
 
-def main(quick=False):
+def main(quick=False, terrain="real"):
     GRID = 15 if quick else 20
     N_SITES = 12 if quick else 16
     N_SENSORS = 3 if quick else 4
     SEED = 42
 
     print("=" * 60)
-    print("QPreFire — Khao Yai Static Sensor Placement")
+    print("Q-Pithak: Khao Yai static sensor placement")
     print("=" * 60)
 
     # ── Step A ──────────────────────────────────────────────────
-    print("\n[A] Building priority surface...")
-    surf = build_priority_surface(grid_rows=GRID, grid_cols=GRID, seed=SEED)
+    print(f"\n[A] Building priority surface ({terrain} terrain)...")
+    # Real terrain: window=None starts at the extract's default window corner for any size.
+    surf = build_priority_surface(grid_rows=GRID, grid_cols=GRID, seed=SEED, source=terrain)
     print(f"    Grid {GRID}×{GRID} | priority range "
           f"[{surf['priority'].min():.3f}, {surf['priority'].max():.3f}]")
 
@@ -181,7 +197,9 @@ def main(quick=False):
             color = "#1a6dd4" if i in results["Greedy"][0] else "#888"
             ax.scatter(c, r, c=color, s=80 if i in results["Greedy"][0] else 20,
                        marker="^" if i in results["Greedy"][0] else "o", zorder=5)
-    plt.suptitle("QPreFire — Priority Surface (Khao Yai, synthetic)", fontsize=12)
+    label = ("real terrain data, modelled hazard and value" if terrain == "real"
+             else "synthetic")
+    plt.suptitle(f"Q-Pithak priority surface (Khao Yai, {label})", fontsize=12)
     plt.tight_layout()
     plt.savefig(f"{OUT}/priority_surface.png", dpi=120)
     print(f"    Saved priority_surface.png")
@@ -207,5 +225,7 @@ def main(quick=False):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true", help="Skip QAOA, use smaller grid")
+    ap.add_argument("--terrain", choices=["real", "synthetic"], default="real",
+                    help="real: committed extract of real geodata (default); synthetic: seeded fake terrain")
     args = ap.parse_args()
-    main(quick=args.quick)
+    main(quick=args.quick, terrain=args.terrain)

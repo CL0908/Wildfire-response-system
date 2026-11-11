@@ -58,30 +58,23 @@ def _apply_rzz(sv, q0, q1, angle, n):
 
 def _apply_rx(sv, q, angle, n):
     c, s = np.cos(angle / 2), -1j * np.sin(angle / 2)
-    bit = 1 << (n - 1 - q)
-    idxs = np.arange(len(sv))
-    i0 = idxs[idxs & bit == 0]
-    i1 = idxs[idxs & bit != 0]
-    a0, a1 = sv[i0].copy(), sv[i1].copy()
-    out = sv.copy()
-    out[i0] = c * a0 + s * a1
-    out[i1] = s * a0 + c * a1
-    return out
+    # Qubit q is bit n-1-q, so it is axis 1 of a (2^q, 2, rest) view.
+    v = sv.reshape(1 << q, 2, -1)
+    out = np.empty_like(v)
+    out[:, 0] = c * v[:, 0] + s * v[:, 1]
+    out[:, 1] = s * v[:, 0] + c * v[:, 1]
+    return out.reshape(-1)
 
 
 def _apply_xy(sv, q0, q1, beta, n):
     """exp(-i*beta*(XX+YY)/2) on (q0, q1): rotates |01> <-> |10>, so the number of 1s is kept."""
-    b0 = 1 << (n - 1 - q0)
-    b1 = 1 << (n - 1 - q1)
-    idxs = np.arange(len(sv))
-    i10 = idxs[(idxs & b0 != 0) & (idxs & b1 == 0)]
-    i01 = i10 ^ b0 ^ b1
     c, s = np.cos(beta), -1j * np.sin(beta)
-    a10, a01 = sv[i10].copy(), sv[i01].copy()
-    out = sv.copy()
-    out[i10] = c * a10 + s * a01
-    out[i01] = s * a10 + c * a01
-    return out
+    # Qubit q is axis q of the (2,)*n tensor; bring the pair to the front.
+    t = np.moveaxis(sv.reshape((2,) * n), (q0, q1), (0, 1)).copy()
+    a10, a01 = t[1, 0].copy(), t[0, 1].copy()
+    t[1, 0] = c * a10 + s * a01
+    t[0, 1] = s * a10 + c * a01
+    return np.ascontiguousarray(np.moveaxis(t, (0, 1), (q0, q1))).reshape(-1)
 
 
 def _xy_pairs(n):

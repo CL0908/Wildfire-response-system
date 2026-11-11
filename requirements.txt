@@ -6,7 +6,3 @@ PuLP>=2.7,<4  # PuLP 4 changed how variables are created
 dimod>=0.12
 dwave-neal>=0.6
 qiskit>=1.0
-
-# Only for solvers/qaoa_hardware.py and solvers/check.py (real hardware runs)
-qiskit-ibm-runtime>=0.20
-qbraid>=0.8
