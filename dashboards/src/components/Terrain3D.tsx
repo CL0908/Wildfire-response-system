@@ -912,12 +912,13 @@ export default function Terrain3D({
       controls.maxPolarAngle = MAX_POLAR // camera stays above the y = 0 plane (terrain is above 0)
       controls.minDistance = 2500
       controls.maxDistance = Math.max(...fits.map((f) => f.distance)) * 1.8
-      // One finger scrolls the page, two fingers rotate and zoom. OrbitControls sets
-      // touch-action: none, which would trap page scrolling on a phone.
-      controls.touches = { ONE: -1 as TOUCH, TWO: TOUCH.DOLLY_ROTATE }
-      canvas.style.touchAction = 'pan-y'
+      // Touch: one finger rotates, two fingers zoom and rotate. The canvas takes every touch
+      // gesture (touch-action: none); browsers cancel the pointers mid-gesture otherwise. The page
+      // is scrolled from the Results link or from any control on the stage.
+      controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_ROTATE }
+      canvas.style.touchAction = 'none'
       const keepTwoFingerGesture = (e: TouchEvent) => {
-        if (e.touches.length >= 2 && e.cancelable) e.preventDefault()
+        if (e.cancelable) e.preventDefault()
       }
       canvas.addEventListener('touchmove', keepTwoFingerGesture, { passive: false })
       controls.update()
@@ -978,10 +979,8 @@ export default function Terrain3D({
       }
       reducedMotion.addEventListener('change', onMotionPref)
       // Any deliberate input on the stage ends it for good.
-      // A finger on the canvas may only be scrolling the page, so touch ends it on a tap or a
-      // second finger instead (see the canvas pointer handlers below).
       const onStagePointerDown = (e: PointerEvent) => {
-        if (e.target === canvas && e.pointerType !== 'touch') stopRotation()
+        if (e.target === canvas) stopRotation()
       }
       const onStageKey = (e: KeyboardEvent) => {
         const t = e.target as Element | null
@@ -1353,7 +1352,7 @@ export default function Terrain3D({
                   <div className="about-legend">
                     <OverlayKey landscape={landscape} />
                   </div>
-                  <p className="terrain-hint">Use two fingers to rotate and zoom.</p>
+                  <p className="terrain-hint">Drag to rotate, pinch to zoom. Use Results to move down the page.</p>
                   <p className="mouse-hint">
                     Scroll to move down the page. Hold Ctrl (⌘ on Mac) and scroll, or use the + and − buttons, to
                     zoom. Drag to rotate.
