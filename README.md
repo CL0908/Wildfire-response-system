@@ -41,15 +41,15 @@ There is no quantum advantage here. In all 60 instances greedy scores at least a
 
 Limits of the QAOA results: they come from a noiseless simulator that applies the exact coverage objective as a phase, which is not a shallow circuit on real hardware.
 
-## Hardware run
+## Hardware runs
 
-`hardware_runs/iqm_garnet_2026-06-01/` holds the raw data of one job on real quantum hardware: plain QAOA with two layers on IQM Garnet (20 qubits), 2,000 shots, on a small synthetic instance with 8 sites and 2 sensors. Scored per shot with no repair, 22.5% of shots placed exactly 2 sensors and 0.5% were the optimal placement; a random 2-sensor placement is optimal 3.6% of the time. The circuit used the original cost function, which double-counted overlapping coverage, and the device's output was closer to uniform noise than to the noiseless circuit. See that folder's README for how the circuit and the counts were decoded.
+`hardware_runs/iqm_garnet_2026-06-01/` holds the raw data of the first of two jobs on real quantum hardware: plain QAOA with two layers on IQM Garnet (20 qubits), 2,000 shots, on a small synthetic instance with 8 sites and 2 sensors. Scored per shot with no repair, 22.5% of shots placed exactly 2 sensors and 0.5% were the optimal placement; a random 2-sensor placement is optimal 3.6% of the time. The circuit used the original cost function, which double-counted overlapping coverage, and the device's output was closer to uniform noise than to the noiseless circuit. See that folder's README for how the circuit and the counts were decoded.
 
-`hardware_runs/proposed_garnet_run/` holds a prepared follow-up job with the cost function fixed. It has not been run; its numbers are simulations.
+`hardware_runs/iqm_garnet_2026-11-12/` holds the follow-up job of 12 November 2026 on the same device and instance: one layer, the cost function fixed, 1,000 shots. 38.8% of shots placed exactly 2 sensors and 2.8% were the optimal placement, and the output was closer to the noiseless circuit than to uniform noise. The average shot still scored 0.284 of the optimum, against 0.666 for a random 2-sensor placement, so this run shows no quantum advantage either. `hardware_runs/proposed_garnet_run/` holds the scripts that prepared, submitted and scored it.
 
 ## Dashboard
 
-`dashboards/` is a single-page React view of one pipeline run: the terrain layers (priority, hazard, ecological value, elevation, recorded fires, park mask), the candidate sites, and each method's placement and coverage, with the benchmark table and the hardware run underneath. `python main.py` writes `dashboards/public/results.json` and `python hardware_runs/export_dashboard.py` writes `dashboards/public/hardware.json`; nothing in it is mocked and nothing is live. `.github/workflows/pages.yml` publishes it to GitHub Pages once a repo admin sets Settings > Pages > Source to "GitHub Actions". See `dashboards/README.md`.
+`dashboards/` is a single-page React view of one pipeline run: the terrain layers (priority, hazard, ecological value, elevation, recorded fires, park mask), the candidate sites, and each method's placement and coverage, with the benchmark table and the hardware runs underneath. `python main.py` writes `dashboards/public/results.json` and `python hardware_runs/export_dashboard.py` writes `dashboards/public/hardware.json`; nothing in it is mocked and nothing is live. `.github/workflows/pages.yml` publishes it to GitHub Pages once a repo admin sets Settings > Pages > Source to "GitHub Actions". See `dashboards/README.md`.
 
 ## Ranger response
 

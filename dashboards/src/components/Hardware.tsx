@@ -73,8 +73,7 @@ function Run({ run, data }: { run: HardwareRun; data: HardwareData }) {
         A random valid placement is the optimum{' '}
         {formatShare(baselines.random_placement.p_optimal)} of the time; of the shots
         measured on {run.device}, {formatShare(run.measured.p_optimal)} were the
-        optimal placement. One job on real quantum hardware: this shows no quantum
-        advantage.
+        optimal placement. This run shows no quantum advantage.
       </p>
     </article>
   )
@@ -84,7 +83,7 @@ export default function Hardware({ data }: { data: HardwareData }) {
   const { instance } = data
   return (
     <section className="hardware" aria-labelledby="hardware-title">
-      <h2 id="hardware-title">Hardware run</h2>
+      <h2 id="hardware-title">Hardware runs</h2>
       <p>
         The instance is the small {instance.n_sites}-site, {instance.n_sensors}-sensor{' '}
         {instance.terrain} case, not the map above.

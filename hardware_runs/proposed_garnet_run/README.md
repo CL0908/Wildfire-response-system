@@ -1,6 +1,6 @@
 # Proposed second IQM Garnet job
 
-Prepared on 12 November 2026 for the remaining qBraid credits. Nothing here has been run on hardware: every number below is a simulation.
+Prepared on 12 November 2026 for the remaining qBraid credits, and run the same day: the result is in `../iqm_garnet_2026-11-12/`. Every number below is a simulation made before the run.
 
 ## The job
 
@@ -52,7 +52,7 @@ The noise model was checked against the real June job and does not reproduce it 
 pip install qbraid
 export QBRAID_API_KEY=...
 python hardware_runs/proposed_garnet_run/submit.py
-python hardware_runs/proposed_garnet_run/score.py hardware_runs/proposed_garnet_run/result.json
+python hardware_runs/proposed_garnet_run/score.py hardware_runs/iqm_garnet_2026-11-12/result.json
 ```
 
-Afterwards, also download the result JSON and program from the qBraid job page, as was done for June, and move everything into a dated folder (`hardware_runs/iqm_garnet_<date>/`).
+`pip install qbraid` is only needed for `submit.py`. The job was submitted this way on 12 November 2026; its result file is `hardware_runs/iqm_garnet_2026-11-12/result.json`.

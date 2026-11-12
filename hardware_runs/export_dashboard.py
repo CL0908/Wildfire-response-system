@@ -26,6 +26,18 @@ RUNS = [
         note="Run with the original cost function, which double-counts overlapping coverage "
              "and uses gate angles of up to 344 full turns.",
     ),
+    dict(
+        folder="iqm_garnet_2026-11-12",
+        device="IQM Garnet (20 qubits)",
+        access="AWS Braket through qBraid",
+        date="2026-11-12",
+        circuit="Plain QAOA, 1 layer, corrected cost function",
+        program="program.qasm",
+        counts=lambda d: d["resultData"]["measurementCounts"],
+        note="Same instance with the cost function fixed and every gate angle under one full turn. "
+             "More shots place 2 sensors than in June, but the average shot is still well below "
+             "a random 2-sensor placement.",
+    ),
 ]
 
 
