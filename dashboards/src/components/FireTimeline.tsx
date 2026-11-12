@@ -265,11 +265,13 @@ export default function FireTimeline({ replay, t, playing, onTime, onPlaying, on
           onKeyDown={onKeyDown}
         />
         <div className="ft-years" aria-hidden="true">
-          {yearLabels.map((y) => (
-            <span key={y.year} style={{ left: `${y.pct}%` }}>
-              {y.label ? y.year : null}
-            </span>
-          ))}
+          {yearLabels
+            .filter((y) => y.label)
+            .map((y) => (
+              <span key={y.year} style={{ left: `${y.pct}%` }}>
+                {y.year}
+              </span>
+            ))}
         </div>
       </div>
 

@@ -80,6 +80,11 @@ function Body({ fires, results, method }: { fires: Fires; results: Results; meth
   const inCovered = sameGrid ? detectionsInCells(detections, new Set(method.covered_cells)).length : null
   const subject = method.sampling ? `the sensors in ${method.name}’s best simulated shot` : `${method.name}’s sensors`
 
+  // A cell counts as inside the park when more than half its area is.
+  const parkShare = sameGrid ? (results.layers.inside_park as number[] | number[][] | undefined)?.flat() : undefined
+  const parkCells = parkShare ? new Set(parkShare.flatMap((share, cell) => (share > 0.5 ? [cell] : []))) : null
+  const inPark = parkCells ? detectionsInCells(detections, parkCells).length : null
+
   return (
     <>
       <div className="sec-head">
@@ -92,6 +97,17 @@ function Body({ fires, results, method }: { fires: Fires; results: Results; meth
           {width > 0 && <FireCalendar years={years} counts={counts} width={width} label={chartLabel} />}
         </div>
       </div>
+      {inPark !== null && parkCells !== null && parkShare && (
+        <div className="fire-check">
+          <p>
+            <strong>
+              {formatInt(inPark)} of {formatInt(total)}
+            </strong>{' '}
+            detections ({pct(inPark, total)}) fell in cells that are mostly inside the park boundary. Those cells are{' '}
+            {pct(parkCells.size, parkShare.length)} of the map; the rest is land outside the park.
+          </p>
+        </div>
+      )}
       {inCovered !== null && (
         <div className="fire-check">
           <p>
