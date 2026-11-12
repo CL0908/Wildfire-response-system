@@ -1407,3 +1407,286 @@ td.has-std {
     line-height: 1.25;
   }
 }
+
+/* Fire history */
+.chart text.fire-count {
+  font-size: 12px;
+}
+
+.fire-check {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 64ch;
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
+}
+
+.fire-check > p:first-child {
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.fire-check strong {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.results tfoot th,
+.results tfoot td {
+  font-weight: 650;
+}
+
+/* Fire replay */
+.segmented input:disabled + span {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-hint {
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--on-dark-muted);
+}
+
+.fire-timeline {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 4;
+  container: fire-timeline / inline-size;
+  pointer-events: auto;
+}
+
+.ft-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'play track speed close'
+    '. info info info'
+    '. note note note';
+  gap: 4px 8px;
+  align-items: start;
+  padding: 8px 12px 10px;
+}
+
+.ft-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-dark);
+  cursor: pointer;
+  border-radius: 10px;
+  border: 1px solid var(--glass-line);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ft-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ft-play {
+  grid-area: play;
+}
+
+.ft-speed {
+  grid-area: speed;
+}
+
+.ft-close {
+  grid-area: close;
+}
+
+.ft-track {
+  grid-area: track;
+  position: relative;
+  height: 54px;
+  min-width: 0;
+}
+
+.ft-bars {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 40px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+
+.ft-bars svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ft-bars-dim rect {
+  fill: rgba(253, 186, 116, 0.38);
+}
+
+.ft-bars-lit rect {
+  fill: var(--ring);
+}
+
+.ft-range {
+  position: absolute;
+  inset: 0 0 auto 0;
+  width: 100%;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.ft-range::-webkit-slider-runnable-track {
+  height: 40px;
+  background: transparent;
+}
+
+.ft-range::-moz-range-track {
+  height: 40px;
+  background: transparent;
+}
+
+.ft-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 8px;
+  height: 40px;
+  border-radius: 3px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.7);
+}
+
+.ft-range::-moz-range-thumb {
+  width: 6px;
+  height: 38px;
+  border-radius: 3px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.7);
+}
+
+.ft-years {
+  position: absolute;
+  inset: 41px 0 auto 0;
+  height: 13px;
+  pointer-events: none;
+}
+
+.ft-years span {
+  position: absolute;
+  top: 0;
+  height: 13px;
+  padding-left: 3px;
+  border-left: 1px solid rgba(255, 255, 255, 0.45);
+  font-size: 0.7rem;
+  line-height: 13px;
+  color: var(--on-dark-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ft-info {
+  grid-area: info;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 16px;
+}
+
+.ft-date {
+  min-width: 9em;
+  font-size: 0.95rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.ft-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 16px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ft-note {
+  grid-area: note;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--on-dark-muted);
+}
+
+@container fire-timeline (max-width: 380px) {
+  .ft-body {
+    grid-template-areas:
+      'play date speed close'
+      'track track track track'
+      'counts counts counts counts'
+      'note note note note';
+  }
+  .ft-info {
+    display: contents;
+  }
+  .ft-date {
+    grid-area: date;
+    min-width: 0;
+    align-self: center;
+    font-size: 0.9rem;
+  }
+  .ft-counts {
+    grid-area: counts;
+  }
+}
+
+/* Between the legend chip and the control card on wide screens; the Results link steps up over the bar. */
+@media (min-width: 1000px) {
+  .fire-timeline {
+    left: calc(16px + min(440px, 50% - 90px) + 12px);
+    right: calc(16px + 136px + 12px);
+  }
+  .has-replay .results-link {
+    bottom: calc(16px + var(--replay-h, 0px) + 8px);
+  }
+  /* The card ends above the bar's top edge (bar height plus margins). */
+  .has-replay .stage-card {
+    max-height: calc(100% - 172px);
+  }
+}
+
+/* Narrower here, so the bar wraps and is taller. */
+@media (min-width: 1000px) and (max-width: 1279.98px) {
+  .has-replay .stage-card {
+    max-height: calc(100% - 213px);
+  }
+}
+
+/* Below 1000 px the bar runs the full width above the Results link, and the legend chip rises over it. */
+@media (max-width: 999.98px) {
+  .fire-timeline {
+    bottom: 64px;
+  }
+  .has-replay .stage-info {
+    bottom: calc(64px + var(--replay-h, 0px) + 8px);
+  }
+}
+
+/* The three zoom buttons stand in a column here, so the bar stops short of them. */
+@media (max-width: 719px) {
+  .fire-timeline {
+    right: 72px;
+  }
+}

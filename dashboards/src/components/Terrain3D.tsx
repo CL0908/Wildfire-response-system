@@ -34,6 +34,9 @@ import CellReadout from './CellReadout'
 import Legend from './Legend'
 import LandscapeLegend from './LandscapeLegend'
 import { drawDrape } from '../lib/drape'
+import { buildFireMarks, type FireMarks } from '../lib/fireMarks'
+import type { Replay } from '../lib/fireReplay'
+import type { Detection } from '../lib/fires'
 import { LAYERS, layerRange, type StageLayer } from '../lib/layers'
 import {
   type LandClass,
@@ -76,6 +79,13 @@ interface Props {
   results: Results
   layer: StageLayer
   method: Method
+  /** Fire replay: drawn only while `replayShown`; `replayT` is playback seconds and changes every frame. */
+  replayShown?: boolean
+  replay?: Replay | null
+  replayT?: number
+  replayPlaying?: boolean
+  /** The detections the replay was built from, in the same order. */
+  detections?: readonly Detection[] | null
   /** Called once if the 3D view cannot be shown (no WebGL, terrain files missing or unusable). */
   onUnavailable?: () => void
 }
@@ -98,7 +108,7 @@ const MAST_HEIGHT_L = 520
 const MAST_RADIUS_L = 24
 const HEAD_SIZE_L = 380
 const DOT_SIZE_L = 220
-const DOT_LIFT_L = 190 // dot centre above ground; clears the canopy clumps (about 90 m at most)
+const DOT_LIFT_L = 190 // dot centre above ground; clears the trees (about 100 m at most)
 const LABEL_HEIGHT_L = 230 // the number pill's height; its width is twice this
 const ACCENT_FALLBACK = '#c2410c'
 const SKIRT_FALLBACK = '#243247' // the walls' colour comes from --terrain-skirt
@@ -438,7 +448,20 @@ function GroundReadout({ hover, results }: { hover: GroundHover | null; results:
   )
 }
 
-export default function Terrain3D({ results, layer, method, onUnavailable }: Props) {
+type FireUpdate = (p: FireProps) => void
+type FireProps = Pick<Props, 'replayShown' | 'replay' | 'replayT' | 'replayPlaying' | 'detections'>
+
+export default function Terrain3D({
+  results,
+  layer,
+  method,
+  replayShown = false,
+  replay = null,
+  replayT = 0,
+  replayPlaying = false,
+  detections = null,
+  onUnavailable,
+}: Props) {
   const box = useRef<HTMLDivElement>(null)
   const camera3d = useRef<{ zoom: (factor: number) => void; reset: () => void } | null>(null)
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -452,6 +475,8 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
   const [landKey, setLandKey] = useState<LandClass[] | 'none'>('none')
   const latest = useRef<Props>({ results, layer, method })
   const update = useRef<Update | null>(null)
+  const fireUpdate = useRef<FireUpdate | null>(null)
+  const fireLatest = useRef<FireProps>({})
   const unavailable = useRef(onUnavailable)
   const landscape = layer === 'landscape'
   const [lo, hi] = useMemo(
@@ -489,6 +514,12 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
     latest.current = { results, layer, method }
     update.current?.(latest.current)
   }, [results, layer, method])
+
+  // The replay clock only moves GPU attributes and asks for one render; nothing is rebuilt.
+  useEffect(() => {
+    fireLatest.current = { replayShown, replay, replayT, replayPlaying, detections }
+    fireUpdate.current?.(fireLatest.current)
+  }, [replayShown, replay, replayT, replayPlaying, detections])
 
   useEffect(() => {
     const host = box.current
@@ -603,6 +634,9 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       const haze = new FogExp2(LANDSCAPE_LIGHT.fogColor, LANDSCAPE_LIGHT.fogDensity)
       let canopyMesh: Canopy | null = null
       let lookIsLandscape = false
+      // Built when the detections are first available; rebuilt if they change.
+      let fire: FireMarks | null = null
+      let fireSource: readonly Detection[] | null = null
       const setLook = (isLandscape: boolean) => {
         if (isLandscape === lookIsLandscape) return
         lookIsLandscape = isLandscape
@@ -612,6 +646,7 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
         scene.fog = isLandscape ? haze : null
         renderer.toneMapping = isLandscape ? ACESFilmicToneMapping : NoToneMapping
         renderer.toneMappingExposure = isLandscape ? LANDSCAPE_LIGHT.exposure : 1
+        fire?.setLandscape(isLandscape)
         terrain.material = isLandscape ? landMaterial : material
         skirt.material = isLandscape ? landSkirtMaterial : skirtMaterial
         if (isLandscape) {
@@ -842,6 +877,34 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       }
       apply(latest.current)
       update.current = apply
+
+      const applyFire: FireUpdate = (p) => {
+        const list = p.detections ?? null
+        if (list !== fireSource) {
+          if (fire) {
+            scene.remove(fire.points)
+            fire.dispose()
+            fire = null
+          }
+          fireSource = list
+          if (list && list.length > 0) {
+            fire = buildFireMarks(list, heights, meta, latest.current.results.grid, rect)
+            fire.setLandscape(lookIsLandscape)
+            fire.points.visible = false
+            scene.add(fire.points)
+          }
+        }
+        if (!fire) return
+        const show = !!p.replayShown && !!p.replay
+        fire.points.visible = show
+        if (show && p.replay) {
+          const state = p.replay.stateAt(p.replayT ?? 0)
+          fire.set(state.phase, state.age)
+        }
+        // Starting playback ends the intro rotation, like any other input.
+        if (show && p.replayPlaying) stopRotation()
+        render()
+      }
 
       const controls = new OrbitControls(camera, canvas)
       place(0)
@@ -1112,11 +1175,14 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       if (titleEl) observer.observe(titleEl)
       resize()
       syncRotation()
+      fireUpdate.current = applyFire
+      applyFire(fireLatest.current)
       setStatus('ready')
 
       cleanup = () => {
         alive = false
         update.current = null
+        fireUpdate.current = null
         camera3d.current = null
         host.removeEventListener('wheel', onWheel, { capture: true })
         cancelAnimationFrame(raf)
@@ -1144,6 +1210,7 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
         controls.removeEventListener('change', repick)
         controls.dispose()
         clearMarkers()
+        fire?.dispose()
         drape?.dispose()
         dotTexture.dispose()
         headTexture.dispose()
@@ -1254,9 +1321,9 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
           <div className="stage-info">
             <div className="stage-chip glass">
               {landscape || !info ? (
-                <LandscapeLegend classes={landKey} />
+                <LandscapeLegend classes={landKey} fires={replayShown} />
               ) : (
-                <Legend info={info} lo={lo} hi={hi} />
+                <Legend info={info} lo={lo} hi={hi} fires={replayShown} />
               )}
               {landscape ? (
                 <GroundReadout hover={hoverGround} results={results} />
@@ -1297,9 +1364,9 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
                   <p>Sensor masts are not to scale.</p>
                   {landscape && (
                     <p>
-                      Ground colours come from ESA WorldCover 2021 land cover and Copernicus elevation. Tree
-                      clumps are placed where the data shows tree cover but are illustrative, as are the shading,
-                      clouds, sky and sun (not the real weather or time of day).
+                      Ground colours come from ESA WorldCover 2021 land cover and Copernicus elevation. Trees
+                      are placed where the data shows tree cover but are illustrative, as are the shading, sky
+                      and sun (not the real weather or time of day).
                     </p>
                   )}
                   <p>

@@ -39,3 +39,7 @@ Khao Yai National Park, relation 2971358, obtained as GeoJSON from polygons.open
 Source: https://polygons.openstreetmap.fr/get_geojson.py?id=2971358&params=0
 Licence: ODbL 1.0, https://www.openstreetmap.org/copyright
 Attribution: © OpenStreetMap contributors
+
+## Fire history for date replay: NASA FIRMS
+
+Same VIIRS S-NPP 375 m yearly Thailand CSVs as above, 2012 to 2025, filtered to the dashboard's map window with the same row filter (confidence `n` or `h`, type == 0). Stored: `dashboards/public/fires.json`, one row per detection (date, lon, lat, FRP, grid row and column, night flag). Source, licence and attribution as in the fire detections entry above.

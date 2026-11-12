@@ -6,7 +6,7 @@ With real terrain the map shows elevation, fire history and land cover for the n
 
 ## Layout
 
-The first screen is the map at full window size, with a floating card for the view (2D or 3D), data layer and method. Scrolling moves down the page; hold Ctrl (⌘ on Mac) and scroll, pinch, or use the buttons to zoom. Below it, one column of four sections: the selected placement, the benchmark, the hardware runs and the data sources. Each section's heading is a sentence computed from the data, and the full tables sit behind "Show the numbers". In the method charts a QAOA bar is the average shot; the best of 2,000 shots is a separate open marker.
+The first screen is the map at full window size, with a floating card for the view (2D or 3D), data layer and method. Scrolling moves down the page; hold Ctrl (⌘ on Mac) and scroll, pinch, or use the buttons to zoom. Below it, one column of sections: the selected placement, the fire history, the benchmark, the hardware runs and the data sources. Each section's heading is a sentence computed from the data, and the full tables sit behind "Show the numbers". In the method charts a QAOA bar is the average shot; the best of 2,000 shots is a separate open marker.
 
 ## Data
 
@@ -19,6 +19,14 @@ The page reads these files from `public/`, all written by Python. From the repo 
 | `public/terrain.bin`, `public/terrain.json` | `python data/export_terrain_mesh.py` (needs `requirements-data.txt`) | 3D terrain surface |
 
 Do not edit any of them by hand. If `results.json` is missing, the page says so. `hardware.json` is optional: if it is missing or malformed, the Hardware runs section is left out. The page makes no network requests beyond these files.
+
+## Fire history
+
+`public/fires.json` holds 628 NASA FIRMS VIIRS 375 m hot-spot detections inside the map window (17 February 2012 to 1 May 2024). `src/lib/fires.ts` loads it once and has the counting helpers (by year and month, and detections inside a set of covered cells); the Fire history section draws them as a year by month grid and counts how many fell in the selected method's covered cells. Fire history is one of the hazard inputs, so that count is a consistency check, not a test of the placement. The section shows a short message if the file is missing and leaves the rest of the page alone.
+
+## Fire replay
+
+The "Fire replay" switch on the 3D stage plays the same 628 NASA FIRMS VIIRS detections in date order on the terrain, with a timeline bar to play, pause, scrub and change speed. It never starts by itself. The positions, dates and fire radiative power (which sets the mark size) are real; the glow, its 10-day fade, the scorch mark left behind and the compressed clock (gaps of more than 30 days between detections are crossed in under a second) are illustrative, and a detection is a 375 m hot spot, not a fire perimeter. With reduced motion the replay steps a month at a time instead of running, and the intro rotation stops as soon as playback starts. The marks are one `THREE.Points` draw (`src/lib/fireMarks.ts`) updated from the playback time without rebuilding the scene.
 
 ## 3D view
 

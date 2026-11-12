@@ -7,10 +7,12 @@ interface Props {
   info: LayerInfo
   lo: number
   hi: number
+  /** Add the fire replay's keys while the replay is shown. */
+  fires?: boolean
 }
 
 /** Colour ramp and overlay key, shared by the 2D map and the 3D view. */
-export default function Legend({ info, lo, hi }: Props) {
+export default function Legend({ info, lo, hi, fires = false }: Props) {
   return (
     <div className="legends">
       <div className="legend">
@@ -68,7 +70,32 @@ export default function Legend({ info, lo, hi }: Props) {
           </svg>
           Chosen sensor
         </li>
+        {fires && (
+          <>
+            <li>
+              <svg width="16" height="16" aria-hidden="true">
+                <defs>
+                  <radialGradient id="fire-key-ember">
+                    <stop offset="0" stopColor="#fff5b8" />
+                    <stop offset="0.45" stopColor="#ffa01a" />
+                    <stop offset="0.8" stopColor="#ff4a0e" />
+                    <stop offset="1" stopColor="#ff4a0e" stopOpacity="0" />
+                  </radialGradient>
+                </defs>
+                <circle cx="8" cy="8" r="7.5" fill="url(#fire-key-ember)" />
+              </svg>
+              Active detection
+            </li>
+            <li>
+              <svg width="16" height="16" aria-hidden="true">
+                <circle cx="8" cy="8" r="4" fill="#211812" stroke="#94491f" strokeWidth="1.2" />
+              </svg>
+              Earlier detection
+            </li>
+          </>
+        )}
       </ul>
+      {fires && <p className="land-note">Detections are real; their glow and fade are illustrative.</p>}
     </div>
   )
 }

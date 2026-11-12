@@ -3,7 +3,7 @@ import {
   CanvasTexture,
   Color,
   DirectionalLight,
-  IcosahedronGeometry,
+  Group,
   InstancedMesh,
   LinearFilter,
   LinearMipmapLinearFilter,
@@ -25,8 +25,7 @@ import { VERTICAL_EXAGGERATION, sampleHeight, type TerrainMeta } from './terrain
 
 /**
  * The Landscape layer: ground colours painted from land cover + terrain, a late-morning sun, a
- * daytime sky backdrop with fair-weather clouds and strata for the side walls. Everything is
- * procedural and deterministic.
+ * daytime sky gradient and strata for the side walls. Everything is procedural and deterministic.
  */
 
 // Sun: compass azimuth measured clockwise from north (135 = south-east), elevation above the horizon.
@@ -75,18 +74,6 @@ function vnoise(x: number, y: number, seed: number): number {
   const c = hash2(ix, iy + 1, seed)
   const d = hash2(ix + 1, iy + 1, seed)
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy
-}
-
-/**
- * Very soft, static dappling that stands in for cloud shadow: 1 in the open, down to
- * 1 - CLOUD_SHADOW_DEPTH under a blob. `x` and `z` are scene metres. Illustrative; it does not
- * line up with the clouds in the sky.
- */
-const CLOUD_SHADOW_DEPTH = 0.12
-export function cloudShadowAt(x: number, z: number): number {
-  const n = vnoise(x / 3800 + 11.3, z / 3800 + 4.1, 61) * 0.65 + vnoise(x / 1500 + 2.7, z / 1500 + 8.9, 73) * 0.35
-  const k = clamp01((n - 0.5) / 0.22)
-  return 1 - CLOUD_SHADOW_DEPTH * k * k * (3 - 2 * k)
 }
 
 // ---------------------------------------------------------------- ground
@@ -295,9 +282,8 @@ export function paintGround(heights: Float32Array, meta: TerrainMeta, lc: Landco
       const calm = 1 - 0.85 * wWater
       const fine = vnoise(gx * 1.1, gy * 1.1, 7) * 0.65 + vnoise(gx * 2.3, gy * 2.3, 19) * 0.35
       const patch = vnoise(gx * 0.2, gy * 0.2, 31) * 0.6 + vnoise(gx * 0.55, gy * 0.55, 43) * 0.4
-      const dapple = cloudShadowAt((gx / (cols - 1) - 0.5) * meta.width_m, (gy / (rows - 1) - 0.5) * meta.height_m)
       const lum =
-        (1 + (fine - 0.5) * 0.32 * calm + (patch - 0.5) * 0.26 * calm) * (1 - clamp01(-rg / 40) * 0.16) * dapple
+        (1 + (fine - 0.5) * 0.32 * calm + (patch - 0.5) * 0.26 * calm) * (1 - clamp01(-rg / 40) * 0.16)
       const hue = (patch - 0.5) * 12 * calm
       const o = (ty * W + tx) * 4
       cImg.data[o] = Math.round(Math.min(255, Math.max(0, (col[0] + hue) * lum)))
@@ -415,87 +401,42 @@ void main() {
 
 // The gradient is a function of the view ray's elevation plus a share of how far the camera
 // looks down, so the horizon band stays near the top of the picture even in the default
-// high-angle view. Clouds are laid on a plane overhead using that same lifted elevation but the
-// true compass bearing of the ray, so orbiting the camera carries them round with the world
-// (they are not glued to the screen); only their height in the picture follows the camera tilt.
+// high-angle view. There are no clouds: the camera never sees much above the horizon, and
+// anything laid on the sky would have to be projected and would stretch as the camera moves.
 const SKY_FRAGMENT = /* glsl */ `
 uniform mat4 uInvProj;
 uniform mat4 uCamWorld;
 uniform vec3 uSunDir;
 uniform float uOffsetDeg;
 uniform vec3 uHaze;
+uniform vec3 uLow;
 uniform vec3 uHorizon;
 uniform vec3 uMid;
 uniform vec3 uZenith;
-uniform vec3 uCloudLit;
-uniform vec3 uCloudShade;
 uniform vec3 uGlow;
 varying vec2 vNdc;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
-float h21(vec2 p) {
-  p = fract(p * vec2(0.1031, 0.1030));
-  p += dot(p, p.yx + 33.33);
-  return fract((p.x + p.y) * p.x);
-}
-
-float vn(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
-}
-
-float fbm(vec2 p) {
-  float a = 0.5;
-  float s = 0.0;
-  mat2 r = mat2(0.8, -0.6, 0.6, 0.8);
-  for (int i = 0; i < 5; i++) {
-    s += a * vn(p);
-    p = r * p * 2.03 + vec2(17.1, 9.7);
-    a *= 0.5;
-  }
-  return s / 0.96875;
-}
-
 void main() {
   vec4 v = uInvProj * vec4(vNdc, 1.0, 1.0);
   vec3 dirView = normalize(v.xyz / v.w);
   vec3 dir = normalize((uCamWorld * vec4(dirView, 0.0)).xyz);
-  float d = degrees(asin(clamp(dir.y, -1.0, 1.0))) + uOffsetDeg;
+  float e = degrees(asin(clamp(dir.y, -1.0, 1.0)));
+  float d = e + uOffsetDeg;
 
-  // Blue deepening towards the zenith, paling to hazy white-blue at the horizon.
+  // Blue deepening towards the zenith, paling to hazy white-blue at the horizon; below it,
+  // pale haze easing to a soft blue.
   vec3 c = mix(uHorizon, uMid, smoothstep(0.0, 11.0, d));
   c = mix(c, uZenith, smoothstep(8.0, 62.0, d));
-  c = mix(uHaze, c, smoothstep(-26.0, 0.0, d));
+  c = mix(c, uHaze, 1.0 - smoothstep(-4.0, 0.0, d));
+  c = mix(c, uLow, 1.0 - smoothstep(-40.0, -4.0, d));
 
   // Sun glow and disc (the disc rarely shows: the default view looks down at the land).
   float cs = max(dot(dir, uSunDir), 0.0);
   c += uGlow * (pow(cs, 8.0) * 0.16 + pow(cs, 120.0) * 0.55);
 
-  // Fair-weather cumulus: denser and smaller towards the horizon, sparse overhead.
-  float e = radians(max(d, 0.0));
-  vec2 az = normalize(dir.xz + vec2(1e-5));
-  vec2 p = az * cos(e) / (sin(e) + 0.11);
-  float near = 1.0 - smoothstep(4.0, 62.0, d);
-  vec2 q = p * 0.72 + vec2(3.7, 1.3);
-  float n = fbm(q);
-  float cover = mix(0.68, 0.47, near);
-  float dens = smoothstep(cover, cover + 0.15, n);
-  vec2 toSun = normalize(uSunDir.xz + vec2(1e-5));
-  float n2 = fbm(q + toSun * 0.09);
-  float lit = clamp(0.6 + (n - n2) * 6.0, 0.0, 1.0);
-  float core = smoothstep(cover + 0.05, cover + 0.4, n);
-  lit = clamp(lit - core * 0.5, 0.0, 1.0);
-  vec3 cloud = mix(uCloudShade, uCloudLit, lit);
-  // The farthest clouds melt into the haze.
-  float far = 1.0 - smoothstep(0.0, 9.0, d);
-  cloud = mix(cloud, uHorizon, far * 0.4);
-  float alpha = dens * smoothstep(0.0, 3.0, d) * 0.96;
-  c = mix(c, cloud, alpha);
-
-  c = mix(c, vec3(1.0, 0.98, 0.93), smoothstep(0.99985, 0.99996, cs) * (1.0 - alpha));
+  c = mix(c, vec3(1.0, 0.98, 0.93), smoothstep(0.99985, 0.99996, cs));
 
   c += (hash(gl_FragCoord.xy) + hash(gl_FragCoord.yx + 7.3) - 1.0) / 255.0;
   gl_FragColor = vec4(c, 1.0);
@@ -523,11 +464,10 @@ export function buildSky(): Sky {
       uSunDir: { value: sunDir },
       uOffsetDeg: { value: 0 },
       uHaze: { value: lin(LANDSCAPE_LIGHT.fogColor) },
+      uLow: { value: lin('#8db9e6') },
       uHorizon: { value: lin('#cfe1f0') },
       uMid: { value: lin('#4a8fdc') },
       uZenith: { value: lin('#1d57b5') },
-      uCloudLit: { value: lin('#ffffff') },
-      uCloudShade: { value: lin('#8696b2') },
       uGlow: { value: lin('#fff1cf') },
     },
   })
@@ -607,51 +547,121 @@ export function fitSun(sun: DirectionalLight, halfW: number, halfH: number, base
 
 // ---------------------------------------------------------------- canopy
 
-// Each instance stands for a clump of crowns. Sizes are real ground metres; heights are scaled by
-// the vertical exaggeration like the terrain, so a clump keeps its proportions against the slopes.
+// Each instance is one broadleaf tree: an irregular two-lobe crown on a short trunk. Sizes are real
+// ground metres; heights are scaled by the vertical exaggeration like the terrain, so a tree keeps
+// its proportions against the slopes. Crowns and trunks are two InstancedMeshes sharing one set of
+// instance matrices (trunks need their own brown, which a per-instance crown colour would tint).
 const CANOPY_SEED = 4171
-const CANOPY_SPACING_M = 58
-const CANOPY_SPACING_COARSE_M = 82 // about half the instances
-const CANOPY_MAX = 40000
-const CROWN_DIAMETER_M = 72
-const CROWN_HEIGHT_M = 34
-const CROWN_SINK = 0.25 // share of the clump's height below ground
-const CANOPY_VALUE_JITTER = 0.08
-/** WorldCover classes that never carry canopy clumps: cropland, built-up, water. */
+const CANOPY_SPACING_M = 42
+const CANOPY_SPACING_COARSE_M = 60
+const CANOPY_MAX = 60000
+const CROWN_DIAMETER_M = 46
+const TREE_HEIGHT_M = 28
+const TREE_MAX_SCENE_M = 110
+const TREE_SINK = 0.05 // share of the tree's height below the surface (hides the trunk foot on slopes)
+/** WorldCover classes that never carry trees: cropland, built-up, water. */
 const NO_CANOPY = new Set([40, 50, WATER_CODE])
 
+// Unit tree: 1 wide (crown diameter) and 1 tall, standing on y = 0.
+const ICO_T = (1 + Math.sqrt(5)) / 2
+const ICO_VERTS: [number, number, number][] = [
+  [-1, ICO_T, 0], [1, ICO_T, 0], [-1, -ICO_T, 0], [1, -ICO_T, 0],
+  [0, -1, ICO_T], [0, 1, ICO_T], [0, -1, -ICO_T], [0, 1, -ICO_T],
+  [ICO_T, 0, -1], [ICO_T, 0, 1], [-ICO_T, 0, -1], [-ICO_T, 0, 1],
+].map(([x, y, z]) => {
+  const l = Math.hypot(x, y, z)
+  return [x / l, y / l, z / l] as [number, number, number]
+})
+const ICO_FACES = [
+  0, 11, 5, 0, 5, 1, 0, 1, 7, 0, 7, 10, 0, 10, 11, 1, 5, 9, 5, 11, 4, 11, 10, 2, 10, 7, 6, 7, 1, 8,
+  3, 9, 4, 3, 4, 2, 3, 2, 6, 3, 6, 8, 3, 8, 9, 4, 9, 5, 2, 4, 11, 6, 2, 10, 8, 6, 7, 9, 8, 1,
+]
+// [centre x, y, z, radius x, y, z, jitter seed]: a wide flattened main lobe and a smaller one on top.
+const CROWN_LOBES: [number, number, number, number, number, number, number][] = [
+  [-0.02, 0.6, 0.02, 0.5, 0.29, 0.47, 1],
+  [0.2, 0.75, 0.13, 0.29, 0.21, 0.28, 2],
+]
+const TRUNK_SIDES = 5
+
+/** Crown (20-face lobes, jittered, smooth normals, light on top and dark underneath) and trunk geometries. */
+function treeGeometries(): { crown: BufferGeometry; trunk: BufferGeometry } {
+  const pos: number[] = []
+  const col: number[] = []
+  const idx: number[] = []
+  for (const [cx, cy, cz, rx, ry, rz, seed] of CROWN_LOBES) {
+    const base = pos.length / 3
+    ICO_VERTS.forEach(([x, y, z], v) => {
+      const j = 0.78 + 0.44 * hash2(v, seed, 911)
+      const px = cx + x * rx * j
+      const py = cy + y * ry * (0.85 + 0.3 * hash2(v, seed, 913))
+      const pz = cz + z * rz * j
+      pos.push(px, py, pz)
+      const k = 0.5 + 0.5 * clamp01((py - 0.34) / 0.6)
+      col.push(k, k, k)
+    })
+    for (const f of ICO_FACES) idx.push(base + f)
+  }
+  const crown = new BufferGeometry()
+  crown.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3))
+  crown.setAttribute('color', new BufferAttribute(new Float32Array(col), 3))
+  crown.setIndex(idx)
+  crown.computeVertexNormals()
+
+  const tp: number[] = []
+  const ti: number[] = []
+  const tc: number[] = []
+  const y0 = -0.08
+  const y1 = 0.62
+  for (let i = 0; i < TRUNK_SIDES; i++) {
+    const a = (i / TRUNK_SIDES) * Math.PI * 2
+    tp.push(Math.cos(a) * 0.04, y0, Math.sin(a) * 0.04, Math.cos(a) * 0.026, y1, Math.sin(a) * 0.026)
+    tc.push(0.6, 0.6, 0.6, 1, 1, 1)
+  }
+  for (let i = 0; i < TRUNK_SIDES; i++) {
+    const n = (i + 1) % TRUNK_SIDES
+    ti.push(i * 2, n * 2, i * 2 + 1, i * 2 + 1, n * 2, n * 2 + 1)
+  }
+  const trunk = new BufferGeometry()
+  trunk.setAttribute('position', new BufferAttribute(new Float32Array(tp), 3))
+  trunk.setAttribute('color', new BufferAttribute(new Float32Array(tc), 3))
+  trunk.setIndex(ti)
+  trunk.computeVertexNormals()
+  return { crown, trunk }
+}
+
 export interface Canopy {
-  mesh: InstancedMesh
+  mesh: Group
   count: number
   triangles: number
   dispose: () => void
 }
 
 /**
- * One InstancedMesh of faceted canopy clumps on a jittered grid. A candidate is kept with the
- * probability of the local tree-cover fraction (0.85 everywhere when `lc` is null) and never on
- * non-tree classes. Deterministic: the same inputs always give the same forest.
+ * Trees on a jittered grid. A candidate is kept with the probability of the local tree-cover
+ * fraction (0.85 everywhere when `lc` is null) and never on non-tree classes; thin cover gives
+ * smaller trees. Deterministic: the same inputs always give the same forest.
  */
 export function buildCanopy(heights: Float32Array, meta: TerrainMeta, lc: LandcoverData | null, coarse: boolean): Canopy {
   const spacing = coarse ? CANOPY_SPACING_COARSE_M : CANOPY_SPACING_M
   const nx = Math.floor(meta.width_m / spacing)
   const nz = Math.floor(meta.height_m / spacing)
-  const geometry = new IcosahedronGeometry(1, 0)
-  // Darker towards the bottom of each clump: cheap ambient occlusion where crowns meet.
-  const pos = geometry.getAttribute('position')
-  const shade = new Float32Array(pos.count * 3)
-  for (let i = 0; i < pos.count; i++) {
-    const k = 0.62 + 0.38 * ((pos.getY(i) + 1) / 2)
-    shade.set([k, k, k], i * 3)
+  const { crown, trunk } = treeGeometries()
+  const crownMaterial = new MeshLambertMaterial({ vertexColors: true })
+  const trunkMaterial = new MeshLambertMaterial({ vertexColors: true, color: new Color('#5a4a3a') })
+  const capacity = Math.min(CANOPY_MAX, nx * nz)
+  const crowns = new InstancedMesh(crown, crownMaterial, capacity)
+  const trunks = new InstancedMesh(trunk, trunkMaterial, capacity)
+  trunks.instanceMatrix = crowns.instanceMatrix // one matrix buffer for both
+  crowns.name = 'landscape-canopy-instances'
+  for (const mesh of [crowns, trunks]) {
+    mesh.castShadow = false
+    mesh.receiveShadow = true
+    mesh.frustumCulled = false
+    mesh.raycast = () => {} // hover picking stays analytic on the height field
   }
-  geometry.setAttribute('color', new BufferAttribute(shade, 3))
-  const material = new MeshLambertMaterial({ flatShading: true, vertexColors: true })
-  const mesh = new InstancedMesh(geometry, material, Math.min(CANOPY_MAX, nx * nz))
-  mesh.name = 'landscape-canopy-instances'
-  mesh.castShadow = false
-  mesh.receiveShadow = true
-  mesh.frustumCulled = false
-  mesh.raycast = () => {} // hover picking stays analytic on the height field
+  const group = new Group()
+  group.name = 'landscape-trees'
+  group.add(trunks, crowns)
 
   const m = new Matrix4()
   const q = new Quaternion()
@@ -661,8 +671,8 @@ export function buildCanopy(heights: Float32Array, meta: TerrainMeta, lc: Landco
   const c = new Color()
   const rgb: [number, number, number] = [0, 0, 0]
   let n = 0
-  for (let j = 0; j < nz && n < CANOPY_MAX; j++) {
-    for (let i = 0; i < nx && n < CANOPY_MAX; i++) {
+  for (let j = 0; j < nz && n < capacity; j++) {
+    for (let i = 0; i < nx && n < capacity; i++) {
       const x = -meta.width_m / 2 + (i + hash2(i, j, CANOPY_SEED)) * spacing
       const z = -meta.height_m / 2 + (j + hash2(i, j, CANOPY_SEED + 1)) * spacing
       const px = pixelAt(meta, x, z)
@@ -671,41 +681,49 @@ export function buildCanopy(heights: Float32Array, meta: TerrainMeta, lc: Landco
       if (lc && NO_CANOPY.has(lc.classes[pi])) continue
       if (hash2(i, j, CANOPY_SEED + 2) >= tf) continue
 
-      const size = 1 + (hash2(i, j, CANOPY_SEED + 3) - 0.5) * 0.6 // +-30%
-      const tall = 0.88 + hash2(i, j, CANOPY_SEED + 4) * 0.24
-      const rx = (CROWN_DIAMETER_M / 2) * size
-      const ry = (CROWN_HEIGHT_M / 2) * VERTICAL_EXAGGERATION * size * tall * (0.8 + 0.4 * tf)
+      const thin = 0.72 + 0.28 * clamp01(tf * 1.25) // smaller trees where cover is sparse
+      const emergent = hash2(i, j, CANOPY_SEED + 7) < 0.04
+      const size = (1 + (hash2(i, j, CANOPY_SEED + 3) - 0.5) * 0.5) * thin * (emergent ? 1.15 : 1)
+      const tall = (0.85 + hash2(i, j, CANOPY_SEED + 4) * 0.35) * (emergent ? 1.45 : 1)
+      const w = CROWN_DIAMETER_M * size
+      const hgt = Math.min(TREE_MAX_SCENE_M, TREE_HEIGHT_M * VERTICAL_EXAGGERATION * size * tall) // stays under the candidate dots
       const h = sampleHeight(heights, meta, x, z)
-      // The clump's lowest point is CROWN_SINK of its height below the surface.
-      at.set(x, h * VERTICAL_EXAGGERATION + ry * (1 - 2 * CROWN_SINK), z)
+      at.set(x, h * VERTICAL_EXAGGERATION - hgt * TREE_SINK, z)
       q.setFromAxisAngle(up, hash2(i, j, CANOPY_SEED + 5) * Math.PI * 2)
-      m.compose(at, q, sc.set(rx, ry, rx))
-      mesh.setMatrixAt(n, m)
+      m.compose(at, q, sc.set(w, hgt, w * (0.88 + 0.24 * hash2(i, j, CANOPY_SEED + 8))))
+      crowns.setMatrixAt(n, m)
 
-      // Same forest ramp as the ground, thinned towards grass where tree cover is low.
+      // Same forest ramp as the ground, thinned towards grass where tree cover is low; a few crowns
+      // run yellower or darker, and every one gets its own value.
       const t = clamp01((h - ELEV_LOW_M) / (ELEV_HIGH_M - ELEV_LOW_M))
       const base = forestRamp(t)
-      const sparse = clamp01((0.9 - tf) / 0.6) * 0.55
-      const v = 1 + (hash2(i, j, CANOPY_SEED + 6) - 0.5) * 2 * CANOPY_VALUE_JITTER
-      const dapple = cloudShadowAt(x, z)
-      for (let k = 0; k < 3; k++) rgb[k] = mix(base[k], SPARSE_TREE[k], sparse) * v * dapple
-      c.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, SRGBColorSpace)
-      mesh.setColorAt(n, c)
+      const sparse = clamp01((0.9 - tf) / 0.6) * 0.45
+      const r = hash2(i, j, CANOPY_SEED + 6)
+      const yellow = r < 0.12 ? 0.45 : 0
+      const dark = r > 0.86 ? 0.7 : 1
+      const v = (0.82 + 0.36 * hash2(i, j, CANOPY_SEED + 9)) * dark
+      for (let k = 0; k < 3; k++) rgb[k] = mix(mix(base[k], SPARSE_TREE[k], sparse), DRY[k], yellow) * v
+      c.setRGB(Math.min(1, rgb[0] / 255), Math.min(1, rgb[1] / 255), Math.min(1, rgb[2] / 255), SRGBColorSpace)
+      crowns.setColorAt(n, c)
       n++
     }
   }
-  mesh.count = n
-  mesh.instanceMatrix.needsUpdate = true
-  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  const perClump = (geometry.index ? geometry.index.count : pos.count) / 3
+  crowns.count = n
+  trunks.count = n
+  crowns.instanceMatrix.needsUpdate = true
+  if (crowns.instanceColor) crowns.instanceColor.needsUpdate = true
+  const perTree = ((crown.index?.count ?? 0) + (trunk.index?.count ?? 0)) / 3
   return {
-    mesh,
+    mesh: group,
     count: n,
-    triangles: n * perClump,
+    triangles: n * perTree,
     dispose: () => {
-      mesh.dispose()
-      geometry.dispose()
-      material.dispose()
+      crowns.dispose()
+      trunks.dispose()
+      crown.dispose()
+      trunk.dispose()
+      crownMaterial.dispose()
+      trunkMaterial.dispose()
     },
   }
 }
