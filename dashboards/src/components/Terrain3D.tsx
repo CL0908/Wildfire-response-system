@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ACESFilmicToneMapping,
   AmbientLight,
+  BackSide,
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
@@ -8,12 +10,16 @@ import {
   CylinderGeometry,
   DirectionalLight,
   DoubleSide,
+  FogExp2,
   Group,
+  HemisphereLight,
   LinearFilter,
   LinearMipmapLinearFilter,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  NoToneMapping,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   SRGBColorSpace,
   Scene,
@@ -26,8 +32,31 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import CellReadout from './CellReadout'
 import Legend from './Legend'
+import LandscapeLegend from './LandscapeLegend'
 import { drawDrape } from '../lib/drape'
-import { LAYERS, layerRange } from '../lib/layers'
+import { LAYERS, layerRange, type StageLayer } from '../lib/layers'
+import {
+  type LandClass,
+  type LandcoverData,
+  type LandcoverState,
+  landClassName,
+  loadLandcover,
+  matchesTerrain,
+  pixelAt,
+  presentClasses,
+} from '../lib/landcover'
+import {
+  LANDSCAPE_LIGHT,
+  addSkirtStrataUVs,
+  buildCanopy,
+  buildSky,
+  fitSun,
+  groundTextures,
+  groundUVs,
+  paintGround,
+  strataTexture,
+  type Canopy,
+} from '../lib/landscape'
 import {
   type TerrainState,
   VERTICAL_EXAGGERATION,
@@ -41,11 +70,11 @@ import {
   sampleHeight,
   sceneToCell,
 } from '../lib/terrain'
-import type { LayerKey, Method, Results } from '../types'
+import type { Method, Results } from '../types'
 
 interface Props {
   results: Results
-  layer: LayerKey
+  layer: StageLayer
   method: Method
   /** Called once if the 3D view cannot be shown (no WebGL, terrain files missing or unusable). */
   onUnavailable?: () => void
@@ -64,6 +93,13 @@ const HEAD_SIZE = 250
 const DOT_SIZE = 170
 const LABEL_SIZE = 200
 const LABEL_SIZE_N = 900 // the "N" sprite's edge length
+// Landscape is busy green, so its markers are bigger, taller and outlined to stand out.
+const MAST_HEIGHT_L = 520
+const MAST_RADIUS_L = 24
+const HEAD_SIZE_L = 380
+const DOT_SIZE_L = 220
+const DOT_LIFT_L = 190 // dot centre above ground; clears the canopy clumps (about 90 m at most)
+const LABEL_HEIGHT_L = 230 // the number pill's height; its width is twice this
 const ACCENT_FALLBACK = '#c2410c'
 const SKIRT_FALLBACK = '#243247' // the walls' colour comes from --terrain-skirt
 const SKIRT_DEPTH_M = 150 // real height of the cut block below the lowest ground
@@ -101,6 +137,17 @@ const TAP_MAX_MS = 600
 
 type Update = (p: Props) => void
 
+/** What the pointer is over in the Landscape layer. */
+interface GroundHover {
+  /** Analysis-grid cell (row * cols + col) under the pointer, or null outside the grid. */
+  cell: number | null
+  elevation: number
+  landClass: string
+  treePct: number | null
+}
+
+const MARKER_OUTLINE = '#ffffff'
+
 function northLabel(): CanvasTexture {
   const size = 128
   const canvas = document.createElement('canvas')
@@ -134,6 +181,73 @@ function circleTexture(fill: string, stroke: string, lineWidth: number): CanvasT
   ctx.lineWidth = lineWidth
   ctx.strokeStyle = stroke
   ctx.stroke()
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  return texture
+}
+
+/** Landscape head: accent disc, thick white ring, thin dark outer edge. */
+function headTextureLandscape(accent: string): CanvasTexture {
+  const size = 96
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const c = size / 2
+  ctx.beginPath()
+  ctx.arc(c, c, c - 1, 0, Math.PI * 2)
+  ctx.fillStyle = '#0b1220'
+  ctx.fill()
+  ctx.beginPath()
+  ctx.arc(c, c, c - 5, 0, Math.PI * 2)
+  ctx.fillStyle = '#ffffff'
+  ctx.fill()
+  ctx.beginPath()
+  ctx.arc(c, c, c - 17, 0, Math.PI * 2)
+  ctx.fillStyle = accent
+  ctx.fill()
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  return texture
+}
+
+/** Landscape candidate site: white dot with a dark outline. */
+function dotTextureLandscape(): CanvasTexture {
+  const size = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  ctx.beginPath()
+  ctx.arc(size / 2, size / 2, size / 2 - 3, 0, Math.PI * 2)
+  ctx.fillStyle = '#ffffff'
+  ctx.fill()
+  ctx.lineWidth = 8
+  ctx.strokeStyle = '#0b1220'
+  ctx.stroke()
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  return texture
+}
+
+/** Landscape site number on a dark pill (the canvas is twice as wide as it is tall). */
+function siteLabelLandscape(id: number): CanvasTexture {
+  const canvas = document.createElement('canvas')
+  canvas.width = 128
+  canvas.height = 64
+  const ctx = canvas.getContext('2d')!
+  ctx.beginPath()
+  ctx.roundRect(4, 6, 88, 52, 26)
+  ctx.fillStyle = 'rgba(11, 18, 32, 0.92)'
+  ctx.fill()
+  ctx.lineWidth = 2
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'
+  ctx.stroke()
+  ctx.font = '700 38px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(String(id), 48, 33)
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
   return texture
@@ -255,9 +369,10 @@ function fitAt(fits: Fit[], azimuth: number): Fit {
 }
 
 /** The overlay key for the About popover, where the chip has no room for it (phones). */
-function OverlayKey() {
+function OverlayKey({ landscape }: { landscape: boolean }) {
   return (
     <ul className="key" aria-label="Overlay key">
+      {!landscape && (
       <li>
         <svg width="16" height="16" aria-hidden="true">
           <defs>
@@ -271,6 +386,7 @@ function OverlayKey() {
         </svg>
         Not covered
       </li>
+      )}
       <li>
         <svg width="16" height="16" aria-hidden="true">
           <circle cx="8" cy="8" r="3" fill="#f9fafb" stroke="#1f2937" strokeWidth="1.2" />
@@ -287,9 +403,39 @@ function OverlayKey() {
   )
 }
 
-function ariaLabel(layer: LayerKey, method: Method): string {
+function ariaLabel(layer: StageLayer, method: Method): string {
+  if (layer === 'landscape') {
+    return `3D landscape of the study area at golden hour, ground coloured by land cover, with candidate sites and the sensors placed by ${method.name} at sites ${method.chosen.join(', ')}. It can be rotated and zoomed. The same information is in the 2D map.`
+  }
   const layerName = LAYERS.find((l) => l.key === layer)?.label ?? layer
   return `3D terrain of the study area, coloured by ${layerName}, with candidate sites and the sensors placed by ${method.name} at sites ${method.chosen.join(', ')}. It can be rotated and zoomed. The same information is in the 2D map.`
+}
+
+function GroundReadout({ hover, results }: { hover: GroundHover | null; results: Results }) {
+  const { cols } = results.grid
+  return (
+    <div className="readout" aria-live="polite">
+      {hover === null ? (
+        <span className="muted">Hover or tap the ground for details.</span>
+      ) : (
+        <>
+          <div>
+            <strong>
+              {hover.cell === null
+                ? 'Outside the analysis grid'
+                : `Row ${Math.floor(hover.cell / cols)}, column ${hover.cell % cols}`}
+            </strong>
+            {' · '}
+            {Math.round(hover.elevation).toLocaleString('en-US')} m
+          </div>
+          <div className="muted">
+            {hover.landClass}
+            {hover.treePct !== null ? ` · ${hover.treePct}% tree cover` : ''}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 export default function Terrain3D({ results, layer, method, onUnavailable }: Props) {
@@ -301,11 +447,18 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
   const [status, setStatus] = useState<Status>('loading')
   const [message, setMessage] = useState('')
   const [hoverCell, setHoverCell] = useState<number | null>(null)
+  const [hoverGround, setHoverGround] = useState<GroundHover | null>(null)
+  // Classes present in the window for the Landscape key; 'none' when land cover could not be loaded.
+  const [landKey, setLandKey] = useState<LandClass[] | 'none'>('none')
   const latest = useRef<Props>({ results, layer, method })
   const update = useRef<Update | null>(null)
   const unavailable = useRef(onUnavailable)
-  const [lo, hi] = useMemo(() => layerRange(results.layers, layer), [results.layers, layer])
-  const info = LAYERS.find((l) => l.key === layer)!
+  const landscape = layer === 'landscape'
+  const [lo, hi] = useMemo(
+    () => (layer === 'landscape' ? [0, 1] : layerRange(results.layers, layer)),
+    [results.layers, layer],
+  )
+  const info = LAYERS.find((l) => l.key === layer)
   const covered = useMemo(() => new Set(method.covered_cells), [method])
 
   // Layer and method changes only repaint the texture and markers; the scene is built once.
@@ -349,13 +502,17 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       unavailable.current?.()
     }
 
-    const build = (state: TerrainState) => {
+    const build = (state: TerrainState, landState: LandcoverState) => {
       if (disposed) return
       if (state.status === 'error') {
         fail(state.message)
         return
       }
       const { meta, heights } = state.terrain
+      // Land cover must sit on exactly this mesh's pixel grid; otherwise Landscape uses elevation only.
+      const land: LandcoverData | null =
+        landState.status === 'ready' && matchesTerrain(landState.data, meta) ? landState.data : null
+      setLandKey(land ? presentClasses(land) : 'none')
 
       let renderer: WebGLRenderer
       try {
@@ -366,6 +523,11 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       }
       partial = renderer
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+      // The sun and terrain never move, so the shadow map is drawn once per switch to Landscape.
+      renderer.shadowMap.enabled = true
+      renderer.shadowMap.type = PCFSoftShadowMap
+      renderer.shadowMap.autoUpdate = false
+      const coarse = window.matchMedia('(pointer: coarse)').matches
       const canvas = renderer.domElement
       canvas.setAttribute('role', 'img')
       host.appendChild(canvas)
@@ -382,8 +544,14 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       geometry.setIndex(new BufferAttribute(buildIndices(meta.rows, meta.cols), 1))
       geometry.computeVertexNormals()
       let alive = true
+      // Data layers: flat-lit drape. Landscape swaps in its own material, lights and sky (setLook).
       const material = new MeshStandardMaterial({ roughness: 1, metalness: 0 })
+      geometry.setAttribute('uv1', new BufferAttribute(groundUVs(meta), 2))
+      const landMaterial = new MeshStandardMaterial({ roughness: 1, metalness: 0 })
+      let groundTex: ReturnType<typeof groundTextures> | null = null
       const terrain = new Mesh(geometry, material)
+      terrain.castShadow = true
+      terrain.receiveShadow = true
       scene.add(terrain)
 
       const skirtColor = new Color(
@@ -403,18 +571,72 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       skirtGeometry.setAttribute('color', new BufferAttribute(skirtColors, 3))
       skirtGeometry.deleteAttribute('shade')
       const skirtMaterial = new MeshBasicMaterial({ vertexColors: true, side: DoubleSide })
-      const skirt = new Mesh(skirtGeometry, skirtMaterial)
+      const skirt = new Mesh<BufferGeometry, MeshBasicMaterial | MeshStandardMaterial>(skirtGeometry, skirtMaterial)
       skirt.raycast = () => {} // never a pick target
+      skirt.receiveShadow = true
       scene.add(skirt)
+      const wallBaseY = (meta.min_m - SKIRT_DEPTH_M) * VERTICAL_EXAGGERATION
+      addSkirtStrataUVs(skirtGeometry, wallBaseY, meta.max_m * VERTICAL_EXAGGERATION)
+      const landSkirtMaterial = new MeshStandardMaterial({ roughness: 1, metalness: 0, side: DoubleSide })
+      let strata: CanvasTexture | null = null
 
-      scene.add(new AmbientLight(0xffffff, AMBIENT))
-      const sun = new DirectionalLight(0xffffff, SUN)
+      const dataAmbient = new AmbientLight(0xffffff, AMBIENT)
+      const dataSun = new DirectionalLight(0xffffff, SUN)
       // From the north-west, the usual hillshade direction; the target is the origin.
-      sun.position.set(-0.8, 0.55, -0.5).multiplyScalar(20000)
-      scene.add(sun)
+      dataSun.position.set(-0.8, 0.55, -0.5).multiplyScalar(20000)
+      scene.add(dataAmbient, dataSun)
+
+      // Landscape look. The group is also the hook for the tree stage: add canopy instances to
+      // `canopy`, and look up ground with landClassAt / treeFractionAt (lib/landcover.ts).
+      const landscapeGroup = new Group()
+      landscapeGroup.name = 'landscape'
+      landscapeGroup.visible = false
+      const canopy = new Group()
+      canopy.name = 'landscape-canopy'
+      const sky = buildSky()
+      const landSun = new DirectionalLight(LANDSCAPE_LIGHT.sunColor, LANDSCAPE_LIGHT.sunIntensity)
+      landSun.castShadow = true
+      fitSun(landSun, meta.width_m / 2, meta.height_m / 2, wallBaseY, meta.max_m * VERTICAL_EXAGGERATION, coarse ? 1024 : 2048)
+      const hemi = new HemisphereLight(LANDSCAPE_LIGHT.skyColor, LANDSCAPE_LIGHT.groundColor, LANDSCAPE_LIGHT.hemiIntensity)
+      landscapeGroup.add(sky.mesh, landSun, landSun.target, hemi, canopy)
+      scene.add(landscapeGroup)
+      const haze = new FogExp2(LANDSCAPE_LIGHT.fogColor, LANDSCAPE_LIGHT.fogDensity)
+      let canopyMesh: Canopy | null = null
+      let lookIsLandscape = false
+      const setLook = (isLandscape: boolean) => {
+        if (isLandscape === lookIsLandscape) return
+        lookIsLandscape = isLandscape
+        landscapeGroup.visible = isLandscape
+        dataAmbient.visible = !isLandscape
+        dataSun.visible = !isLandscape
+        scene.fog = isLandscape ? haze : null
+        renderer.toneMapping = isLandscape ? ACESFilmicToneMapping : NoToneMapping
+        renderer.toneMappingExposure = isLandscape ? LANDSCAPE_LIGHT.exposure : 1
+        terrain.material = isLandscape ? landMaterial : material
+        skirt.material = isLandscape ? landSkirtMaterial : skirtMaterial
+        if (isLandscape) {
+          if (!groundTex) {
+            groundTex = groundTextures(paintGround(heights, meta, land), renderer.capabilities.getMaxAnisotropy())
+            landMaterial.map = groundTex.map
+            landMaterial.roughnessMap = groundTex.roughnessMap
+            landMaterial.needsUpdate = true
+          }
+          if (!strata) {
+            strata = strataTexture(renderer.capabilities.getMaxAnisotropy())
+            landSkirtMaterial.map = strata
+            landSkirtMaterial.needsUpdate = true
+          }
+          // Built once, on first use; hiding the group is all a layer switch does.
+          if (!canopyMesh) {
+            canopyMesh = buildCanopy(heights, meta, land, coarse)
+            canopy.add(canopyMesh.mesh)
+          }
+          renderer.shadowMap.needsUpdate = true
+        }
+      }
 
       const labelTexture = northLabel()
-      const labelMaterial = new SpriteMaterial({ map: labelTexture, depthTest: false })
+      const labelMaterial = new SpriteMaterial({ map: labelTexture, depthTest: false, fog: false, toneMapped: false })
       const label = new Sprite(labelMaterial)
       label.scale.setScalar(LABEL_SIZE_N)
       label.position.set(0, meta.max_m * VERTICAL_EXAGGERATION * 0.5, -meta.height_m / 2 - 700)
@@ -424,10 +646,19 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       const accent = getComputedStyle(host).getPropertyValue('--accent').trim() || ACCENT_FALLBACK
       const dotTexture = circleTexture('#f9fafb', '#1f2937', 10)
       const headTexture = circleTexture(accent, '#ffffff', 10)
-      const dotMaterial = new SpriteMaterial({ map: dotTexture, depthWrite: false })
-      const headMaterial = new SpriteMaterial({ map: headTexture, depthWrite: false })
+      // Markers keep their true colours under Landscape's tone mapping and haze.
+      const dotMaterial = new SpriteMaterial({ map: dotTexture, depthWrite: false, fog: false, toneMapped: false })
+      const headMaterial = new SpriteMaterial({ map: headTexture, depthWrite: false, fog: false, toneMapped: false })
+      const dotTextureL = dotTextureLandscape()
+      const headTextureL = headTextureLandscape(accent)
+      const dotMaterialL = new SpriteMaterial({ map: dotTextureL, depthWrite: false, fog: false, toneMapped: false })
+      const headMaterialL = new SpriteMaterial({ map: headTextureL, depthWrite: false, fog: false, toneMapped: false })
+      const mastGeometryL = new CylinderGeometry(MAST_RADIUS_L, MAST_RADIUS_L, MAST_HEIGHT_L, 6)
       const mastGeometry = new CylinderGeometry(MAST_RADIUS, MAST_RADIUS, MAST_HEIGHT, 6)
-      const mastMaterial = new MeshBasicMaterial({ color: accent })
+      const mastMaterial = new MeshBasicMaterial({ color: accent, fog: false, toneMapped: false })
+      // A white back-face shell round each mast reads as a light outline against green (Landscape only).
+      const outlineGeometry = new CylinderGeometry(MAST_RADIUS_L * 1.7, MAST_RADIUS_L * 1.7, MAST_HEIGHT_L * 1.02, 6)
+      const outlineMaterial = new MeshBasicMaterial({ color: MARKER_OUTLINE, side: BackSide, fog: false, toneMapped: false })
       const markers = new Group()
       scene.add(markers)
       let markerLabels: { material: SpriteMaterial; texture: CanvasTexture }[] = []
@@ -542,44 +773,67 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       const apply: Update = (p) => {
         canvas.setAttribute('aria-label', ariaLabel(p.layer, p.method))
 
-        const texture = new CanvasTexture(drawDrape(p.results, p.layer, p.method))
-        texture.colorSpace = SRGBColorSpace
-        texture.generateMipmaps = true
-        texture.minFilter = LinearMipmapLinearFilter
-        texture.magFilter = LinearFilter
-        texture.anisotropy = renderer.capabilities.getMaxAnisotropy()
-        const hadMap = material.map !== null
-        material.map = texture
-        if (!hadMap) material.needsUpdate = true
-        drape?.dispose()
-        drape = texture
+        setLook(p.layer === 'landscape')
+        if (p.layer === 'landscape') {
+          // The data drape is not needed here; free it and let the next data layer rebuild it.
+          material.map = null
+          drape?.dispose()
+          drape = null
+        } else {
+          const texture = new CanvasTexture(drawDrape(p.results, p.layer, p.method))
+          texture.colorSpace = SRGBColorSpace
+          texture.generateMipmaps = true
+          texture.minFilter = LinearMipmapLinearFilter
+          texture.magFilter = LinearFilter
+          texture.anisotropy = renderer.capabilities.getMaxAnisotropy()
+          const hadMap = material.map !== null
+          material.map = texture
+          if (!hadMap) material.needsUpdate = true
+          drape?.dispose()
+          drape = texture
+        }
 
         clearMarkers()
         const chosen = new Set(p.method.chosen)
+        const isL = p.layer === 'landscape'
+        const mastH = isL ? MAST_HEIGHT_L : MAST_HEIGHT
+        const headSize = isL ? HEAD_SIZE_L : HEAD_SIZE
         for (const site of p.results.sites) {
           const { x, z } = cellCentreScene(site.row, site.col, p.results.grid, rect)
           const ground = sampleHeight(heights, meta, x, z) * VERTICAL_EXAGGERATION
           if (!chosen.has(site.id)) {
-            const dot = new Sprite(dotMaterial)
-            dot.scale.setScalar(DOT_SIZE)
-            dot.position.set(x, ground + DOT_SIZE / 2, z)
+            const dotSize = isL ? DOT_SIZE_L : DOT_SIZE
+            const dot = new Sprite(isL ? dotMaterialL : dotMaterial)
+            dot.scale.setScalar(dotSize)
+            dot.position.set(x, ground + (isL ? DOT_LIFT_L : DOT_SIZE / 2), z)
             markers.add(dot)
             continue
           }
-          const mast = new Mesh(mastGeometry, mastMaterial)
-          mast.position.set(x, ground + MAST_HEIGHT / 2, z)
+          const mast = new Mesh(isL ? mastGeometryL : mastGeometry, mastMaterial)
+          mast.position.set(x, ground + mastH / 2, z)
           markers.add(mast)
-          const head = new Sprite(headMaterial)
-          head.scale.setScalar(HEAD_SIZE)
-          head.position.set(x, ground + MAST_HEIGHT, z)
+          if (isL) {
+            const shell = new Mesh(outlineGeometry, outlineMaterial)
+            shell.position.copy(mast.position)
+            markers.add(shell)
+          }
+          const head = new Sprite(isL ? headMaterialL : headMaterial)
+          head.scale.setScalar(headSize)
+          head.position.set(x, ground + mastH, z)
           markers.add(head)
-          const labelTexture = siteLabel(site.id)
-          const labelMaterial = new SpriteMaterial({ map: labelTexture, depthTest: false })
+          const labelTexture = isL ? siteLabelLandscape(site.id) : siteLabel(site.id)
+          const labelMaterial = new SpriteMaterial({ map: labelTexture, depthTest: false, fog: false, toneMapped: false })
           const label = new Sprite(labelMaterial)
-          label.scale.setScalar(LABEL_SIZE * 2)
-          // Anchor the sprite's left edge just right of the head, whichever way the camera turns.
-          label.center.set(-(HEAD_SIZE * 0.5) / (LABEL_SIZE * 2), 0.5)
-          label.position.set(x, ground + MAST_HEIGHT, z)
+          if (isL) {
+            label.scale.set(LABEL_HEIGHT_L * 2, LABEL_HEIGHT_L, 1)
+            // The pill's left edge (4 of 128 px) sits just right of the head.
+            label.center.set((4 / 128) - (headSize * 0.5 + 10) / (LABEL_HEIGHT_L * 2), 0.5)
+          } else {
+            label.scale.setScalar(LABEL_SIZE * 2)
+            // Anchor the sprite's left edge just right of the head, whichever way the camera turns.
+            label.center.set(-(HEAD_SIZE * 0.5) / (LABEL_SIZE * 2), 0.5)
+          }
+          label.position.set(x, ground + mastH, z)
           label.renderOrder = 2
           markers.add(label)
           markerLabels.push({ material: labelMaterial, texture: labelTexture })
@@ -745,7 +999,7 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       let lastMouse: { x: number; y: number } | null = null
       const origin = new Vector3()
       const dir = new Vector3()
-      const pickCell = (clientX: number, clientY: number): number | null => {
+      const pickHit = (clientX: number, clientY: number): { x: number; z: number } | null => {
         const box = canvas.getBoundingClientRect()
         if (box.width === 0 || box.height === 0) return null
         camera.updateMatrixWorld()
@@ -755,18 +1009,38 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
           .unproject(camera)
           .sub(origin)
           .normalize()
-        const hit = rayTerrainHit(origin, dir, heights, meta, VERTICAL_EXAGGERATION)
-        if (!hit) return null
+        return rayTerrainHit(origin, dir, heights, meta, VERTICAL_EXAGGERATION)
+      }
+      let lastGroundPixel = -2
+      const flushPickAt = (clientX: number, clientY: number) => {
+        const hit = pickHit(clientX, clientY)
         const grid = latest.current.results.grid
-        const cell = sceneToCell(hit.x, hit.z, grid, rect)
-        return cell ? cell.row * grid.cols + cell.col : null
+        const cell = hit ? sceneToCell(hit.x, hit.z, grid, rect) : null
+        setHoverCell(cell ? cell.row * grid.cols + cell.col : null)
+        if (latest.current.layer !== 'landscape') return
+        if (!hit) {
+          lastGroundPixel = -1
+          setHoverGround(null)
+          return
+        }
+        // The class under the pointer comes from the fine (terrain-pixel) grid, not the 500 m cell.
+        const px = pixelAt(meta, hit.x, hit.z)
+        const pixel = px.row * meta.cols + px.col
+        if (pixel === lastGroundPixel) return
+        lastGroundPixel = pixel
+        setHoverGround({
+          cell: cell ? cell.row * grid.cols + cell.col : null,
+          elevation: sampleHeight(heights, meta, hit.x, hit.z),
+          landClass: land ? landClassName(land.classes[pixel]) : 'Land cover unavailable',
+          treePct: land && land.classes[pixel] === 10 ? Math.round((land.tree[pixel] / 255) * 100) : null,
+        })
       }
       const flushPick = () => {
         raf = 0
         if (!alive || !pending) return
         const { x, y } = pending
         pending = null
-        setHoverCell(pickCell(x, y))
+        flushPickAt(x, y)
       }
       const schedulePick = (x: number, y: number) => {
         pending = { x, y }
@@ -804,7 +1078,9 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
         if (e.pointerType === 'touch') return
         lastMouse = null
         pending = null
+        lastGroundPixel = -2
         setHoverCell(null)
+        setHoverGround(null)
       }
       // Wheel zoom and drag rotation move the terrain under a still pointer.
       const repick = () => {
@@ -873,11 +1149,26 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
         headTexture.dispose()
         dotMaterial.dispose()
         headMaterial.dispose()
+        dotTextureL.dispose()
+        headTextureL.dispose()
+        dotMaterialL.dispose()
+        headMaterialL.dispose()
+        mastGeometryL.dispose()
+        canopyMesh?.dispose()
         mastGeometry.dispose()
         mastMaterial.dispose()
+        outlineGeometry.dispose()
+        outlineMaterial.dispose()
         geometry.dispose()
         skirtGeometry.dispose()
         skirtMaterial.dispose()
+        landSkirtMaterial.dispose()
+        strata?.dispose()
+        groundTex?.map.dispose()
+        groundTex?.roughnessMap.dispose()
+        landMaterial.dispose()
+        sky.dispose()
+        landSun.shadow.map?.dispose()
         material.dispose()
         labelMaterial.dispose()
         labelTexture.dispose()
@@ -888,8 +1179,8 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
       }
     }
 
-    loadTerrain()
-      .then(build)
+    Promise.all([loadTerrain(), loadLandcover()])
+      .then(([terrainState, landState]) => build(terrainState, landState))
       .catch(() => {
         if (disposed) return
         if (cleanup) cleanup()
@@ -962,14 +1253,22 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
           </div>
           <div className="stage-info">
             <div className="stage-chip glass">
-              <Legend info={info} lo={lo} hi={hi} />
-              <CellReadout
-                results={results}
-                method={method}
-                covered={covered}
-                cell={hoverCell}
-                idle="Hover or tap a cell for details."
-              />
+              {landscape || !info ? (
+                <LandscapeLegend classes={landKey} />
+              ) : (
+                <Legend info={info} lo={lo} hi={hi} />
+              )}
+              {landscape ? (
+                <GroundReadout hover={hoverGround} results={results} />
+              ) : (
+                <CellReadout
+                  results={results}
+                  method={method}
+                  covered={covered}
+                  cell={hoverCell}
+                  idle="Hover or tap a cell for details."
+                />
+              )}
             </div>
             <div className="about">
               <button
@@ -985,7 +1284,7 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
               {aboutOpen && (
                 <div id="about-view" ref={aboutPanel} className="about-pop glass" role="group" aria-label="About this view">
                   <div className="about-legend">
-                    <OverlayKey />
+                    <OverlayKey landscape={landscape} />
                   </div>
                   <p className="terrain-hint">Use two fingers to rotate and zoom.</p>
                   <p className="mouse-hint">
@@ -996,9 +1295,17 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
                     Heights exaggerated {VERTICAL_EXAGGERATION}×. Elevation: Copernicus DEM GLO-30, 30 m.
                   </p>
                   <p>Sensor masts are not to scale.</p>
+                  {landscape && (
+                    <p>
+                      Ground colours come from ESA WorldCover 2021 land cover and Copernicus elevation. Tree
+                      clumps are placed where the data shows tree cover but are illustrative, as are the shading,
+                      sky and sun (not the real time of day).
+                    </p>
+                  )}
                   <p>
-                    Shading shows the terrain&apos;s shape and slightly darkens slopes; hover or tap a cell for its
-                    exact value.
+                    {landscape
+                      ? 'Hover or tap the ground for its row, column, elevation and land cover.'
+                      : 'Shading shows the terrain\u2019s shape and slightly darkens slopes; hover or tap a cell for its exact value.'}
                   </p>
                   <p>
                     Coverage was computed on the {results.grid.cell_size_m} m grid. On this 30 m surface a covered

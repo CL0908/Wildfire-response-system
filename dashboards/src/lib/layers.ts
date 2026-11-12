@@ -11,6 +11,14 @@ export interface LayerInfo {
   scale: LayerScale
 }
 
+/**
+ * What the 3D stage can show: a data layer or the Landscape look. Landscape is not data, so
+ * everything keyed by `LayerKey` (2D map, drape, legend ramp) never sees it.
+ */
+export type StageLayer = LayerKey | 'landscape'
+
+export const LANDSCAPE: { key: 'landscape'; label: string } = { key: 'landscape', label: 'Landscape' }
+
 /** Every layer the page knows about, in display order. */
 export const LAYERS: LayerInfo[] = [
   { key: 'priority', label: 'Priority', unit: '', digits: 2, scale: 'linear' },

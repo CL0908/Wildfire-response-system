@@ -24,7 +24,7 @@ export default function MethodPicker({ results, selected, onSelect }: Props) {
             <strong>{m.name}</strong>
             <span className="muted">
               {m.sampling
-                ? `${m.kind}, best of ${formatInt(m.sampling.shots)} shots; average shot ${formatPercent(m.sampling.mean_ratio)}`
+                ? `${m.kind} · best of ${formatInt(m.sampling.shots)} shots · avg shot ${formatPercent(m.sampling.mean_ratio)}`
                 : m.kind}
             </span>
           </span>

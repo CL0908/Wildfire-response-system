@@ -22,6 +22,8 @@ Do not edit any of them by hand. If `results.json` is missing, the page says so.
 
 ## 3D view
 
+The default layer is Landscape: the ground is painted from ESA WorldCover 2021 land cover and Copernicus elevation (`public/landcover.bin`, written by `python data/export_landcover_mesh.py`), with tree clumps placed where the data shows tree cover. The clumps, the shading, the sky and the sun are illustrative, and the page says so. The data layers below are drawn flat-lit on a dark background so their colours match the legend.
+
 The 3D view drapes the same 500 m cells over the real elevation at 30 m (Copernicus DEM GLO-30), with heights exaggerated 2×. Sensor masts are not to scale. Coverage is computed on the 500 m grid, so on the 30 m surface a covered cell can look hidden behind a ridge the coarse model does not see. Shading is kept light so colours stay close to the legend; hover or tap a cell for its exact values. The 2D map shows the same information and is the keyboard-accessible view. If the browser cannot run WebGL, the page falls back to 2D.
 
 The 3D view uses [three.js](https://threejs.org) 0.170 (MIT licence), loaded as a separate chunk. Re-run `data/export_terrain_mesh.py` if the map window in `results.json` changes.

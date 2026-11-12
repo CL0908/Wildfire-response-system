@@ -190,6 +190,33 @@ ul {
   gap: 6px;
 }
 
+.land-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  list-style: none;
+}
+
+.land-note {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.land-key li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.land-key i {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
 /* Methods */
 .methods {
   border: 0;
@@ -1113,6 +1140,45 @@ td.has-std {
   font-size: 0.78rem;
   border-left-color: rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.07);
+}
+
+/* Wide screens: the card sits beside the terrain, so it is tightened to show all of it at 1280 x 720.
+   The phone sheet keeps its roomier rows and 40 px touch targets. */
+@media (min-width: 1000px) {
+  .stage-card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .card-scroll {
+    gap: 6px;
+  }
+  .stage-card .card-section {
+    gap: 4px;
+  }
+  .stage-card .segmented span {
+    padding: 3px 8px;
+  }
+  .stage-card .method-name {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 8px;
+  }
+  .stage-card .method-row {
+    padding: 1px 8px;
+  }
+  .stage-card .methods legend {
+    margin-bottom: 4px;
+  }
+  .stage-card .detail {
+    margin-top: 4px;
+    gap: 5px;
+  }
+  .stage-card .note {
+    padding: 5px 9px;
+    font-size: 0.74rem;
+    line-height: 1.3;
+  }
 }
 
 .controls-open {

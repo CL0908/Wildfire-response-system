@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react'
 import { useResults } from './lib/data'
 import { formatDate, formatRange } from './lib/format'
-import type { LayerKey, Results } from './types'
+import type { Results } from './types'
 import type Terrain3DView from './components/Terrain3D'
 import MapView from './components/MapView'
 import LayerSwitch from './components/LayerSwitch'
@@ -15,7 +15,7 @@ import DataSources from './components/DataSources'
 import Hardware from './components/Hardware'
 import Footer from './components/Footer'
 import { useHardware } from './lib/hardware'
-import { availableLayers } from './lib/layers'
+import { LANDSCAPE, availableLayers, type StageLayer } from './lib/layers'
 
 type Terrain3DProps = Parameters<typeof Terrain3DView>[0]
 
@@ -38,7 +38,7 @@ const Terrain3D = lazy(loadTerrain3D)
 void loadTerrain3D()
 
 function Dashboard({ results }: { results: Results }) {
-  const [layer, setLayer] = useState<LayerKey>('priority')
+  const [layer, setLayer] = useState<StageLayer>('landscape')
   const [view, setView] = useState<ViewMode>('3d')
   const [fellBack, setFellBack] = useState(false)
   // Only the default 3D view falls back by itself; after a manual pick the failure shows in place.
@@ -58,6 +58,8 @@ function Dashboard({ results }: { results: Results }) {
   const { grid } = results
   const hardware = useHardware()
   const layerInfos = availableLayers(results.layers)
+  // Landscape is a 3D-only look; the 2D map shows Priority in its place.
+  const layer2d = layer === 'landscape' ? 'priority' : layer
   // The 2D panel starts below the title block, whatever height the title wraps to.
   const stageRef = useRef<HTMLElement>(null)
   const titleRef = useRef<HTMLElement>(null)
@@ -103,7 +105,11 @@ function Dashboard({ results }: { results: Results }) {
             <span className="card-label" aria-hidden="true">
               Layer
             </span>
-            <LayerSwitch layers={layerInfos} value={layer} onChange={setLayer} />
+            {view === '2d' ? (
+              <LayerSwitch layers={layerInfos} value={layer2d} onChange={setLayer} />
+            ) : (
+              <LayerSwitch layers={[LANDSCAPE, ...layerInfos]} value={layer} onChange={setLayer} />
+            )}
           </div>
           <div className="card-section">
             <MethodPicker results={results} selected={methodIndex} onSelect={setMethodIndex} />
@@ -113,7 +119,7 @@ function Dashboard({ results }: { results: Results }) {
         {view === '2d' ? (
           <div className="stage-2d">
             <div className="panel-2d">
-              <MapView results={results} layer={layer} method={method} />
+              <MapView results={results} layer={layer2d} method={method} />
             </div>
           </div>
         ) : (
