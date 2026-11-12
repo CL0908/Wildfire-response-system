@@ -1,18 +1,10 @@
 import { useMemo, useState } from 'react'
-import { rampColor } from '../lib/color'
-import {
-  LAYERS,
-  NO_FIRE_FILL,
-  availableLayers,
-  cellFill,
-  formatLayerValue,
-  layerRange,
-  legendT,
-} from '../lib/layers'
+import CellReadout from './CellReadout'
+import Legend from './Legend'
+import { LAYERS, cellFill, layerRange } from '../lib/layers'
 import type { LayerKey, Method, Results } from '../types'
 
 const CELL = 20
-const LEGEND_STEPS = 8
 
 interface Props {
   results: Results
@@ -27,7 +19,6 @@ export default function MapView({ results, layer, method }: Props) {
   const [activeSite, setActiveSite] = useState<number | null>(null)
 
   const info = LAYERS.find((l) => l.key === layer)!
-  const shownLayers = useMemo(() => availableLayers(layers), [layers])
   const [lo, hi] = useMemo(() => layerRange(layers, layer), [layers, layer])
   const covered = useMemo(() => new Set(method.covered_cells), [method])
   const chosen = useMemo(() => new Set(method.chosen), [method])
@@ -58,15 +49,6 @@ export default function MapView({ results, layer, method }: Props) {
       : hoverCell
   const sr = shownCell === null ? 0 : Math.floor(shownCell / cols)
   const sc = shownCell === null ? 0 : shownCell % cols
-
-  const siteSummary = (id: number) => {
-    const cellsOfSite = viewsheds[String(id)] ?? []
-    const pr = cellsOfSite.reduce(
-      (sum, i) => sum + layers.priority[Math.floor(i / cols)][i % cols],
-      0,
-    )
-    return `Site ${id}: viewshed ${cellsOfSite.length} cells, priority sum ${pr.toFixed(2)}`
-  }
 
   const labelOnLeft = (col: number) => col > cols - 4
 
@@ -207,86 +189,16 @@ export default function MapView({ results, layer, method }: Props) {
         </g>
       </svg>
 
-      <div className="readout" aria-live="polite">
-        {shownCell === null ? (
-          <span className="muted">Hover a cell or focus a site for details.</span>
-        ) : (
-          <>
-            <div>
-              <strong>
-                Row {sr}, column {sc}
-              </strong>
-              {' · '}
-              {covered.has(shownCell) ? 'covered' : 'not covered'} by {method.name}
-            </div>
-            <div className="muted">
-              {shownLayers
-                .map((l) => `${l.label} ${formatLayerValue(l, layers[l.key]![sr][sc])}`)
-                .join(' · ')}
-            </div>
-            {activeSiteInfo && <div>{siteSummary(activeSiteInfo.id)}</div>}
-          </>
-        )}
-      </div>
+      <CellReadout
+        results={results}
+        method={method}
+        covered={covered}
+        cell={shownCell}
+        siteId={activeSiteInfo?.id ?? null}
+        idle="Hover a cell or focus a site for details."
+      />
 
-      <div className="legends">
-        <div className="legend">
-          <span className="legend-title">{info.label}</span>
-          {info.scale === 'fires' && (
-            <>
-              <span className="ramp" aria-hidden="true">
-                <i style={{ background: NO_FIRE_FILL }} />
-              </span>
-              <span className="muted">0</span>
-            </>
-          )}
-          <span className="muted">
-            {formatLayerValue(info, info.scale === 'fires' ? Math.min(1, hi) : lo)}
-          </span>
-          <span className="ramp" aria-hidden="true">
-            {Array.from({ length: LEGEND_STEPS }, (_, i) => (
-              <i key={i} style={{ background: rampColor(legendT(info, i, LEGEND_STEPS)) }} />
-            ))}
-          </span>
-          <span className="muted">
-            {formatLayerValue(info, hi)}
-            {info.scale === 'fires' ? ' detections' : ''}
-          </span>
-        </div>
-        <ul className="key" aria-label="Overlay key">
-          <li>
-            <svg width="16" height="16" aria-hidden="true">
-              <defs>
-                <pattern
-                  id="hatch-key"
-                  width="6"
-                  height="6"
-                  patternUnits="userSpaceOnUse"
-                  patternTransform="rotate(45)"
-                >
-                  <rect width="6" height="6" fill="#fff" fillOpacity="0.5" />
-                  <line x1="0" y1="0" x2="0" y2="6" stroke="#4b5563" strokeWidth="1.4" />
-                </pattern>
-              </defs>
-              <rect width="16" height="16" fill="#c9dbd6" />
-              <rect width="16" height="16" fill="url(#hatch-key)" />
-            </svg>
-            Not covered
-          </li>
-          <li>
-            <svg width="16" height="16" aria-hidden="true">
-              <circle cx="8" cy="8" r="3" fill="#f9fafb" stroke="#1f2937" strokeWidth="1.2" />
-            </svg>
-            Candidate site
-          </li>
-          <li>
-            <svg width="16" height="16" aria-hidden="true">
-              <circle cx="8" cy="8" r="6" fill="var(--accent)" stroke="#fff" strokeWidth="1.5" />
-            </svg>
-            Chosen sensor
-          </li>
-        </ul>
-      </div>
+      <Legend info={info} lo={lo} hi={hi} />
     </div>
   )
 }

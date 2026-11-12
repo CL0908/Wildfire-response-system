@@ -49,7 +49,7 @@ Limits of the QAOA results: they come from a noiseless simulator that applies th
 
 ## Dashboard
 
-`dashboards/` is a single-page React view of one pipeline run: the terrain layers (priority, hazard, ecological value, elevation, recorded fires, park mask), the candidate sites, and each method's placement and coverage, with the benchmark table and the hardware runs underneath. `python main.py` writes `dashboards/public/results.json` and `python hardware_runs/export_dashboard.py` writes `dashboards/public/hardware.json`; nothing in it is mocked and nothing is live. `.github/workflows/pages.yml` publishes it to GitHub Pages once a repo admin sets Settings > Pages > Source to "GitHub Actions". See `dashboards/README.md`.
+`dashboards/` is a single-page React view of one pipeline run, in 2D or draped over the real terrain in 3D: the terrain layers (priority, hazard, ecological value, elevation, recorded fires, park mask), the candidate sites, and each method's placement and coverage, with the benchmark table and the hardware runs underneath. `python main.py` writes `dashboards/public/results.json` and `python hardware_runs/export_dashboard.py` writes `dashboards/public/hardware.json`; nothing in it is mocked and nothing is live. `.github/workflows/pages.yml` publishes it to GitHub Pages once a repo admin sets Settings > Pages > Source to "GitHub Actions". See `dashboards/README.md`.
 
 ## Ranger response
 
