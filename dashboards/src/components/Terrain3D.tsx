@@ -405,7 +405,7 @@ function OverlayKey({ landscape }: { landscape: boolean }) {
 
 function ariaLabel(layer: StageLayer, method: Method): string {
   if (layer === 'landscape') {
-    return `3D landscape of the study area at golden hour, ground coloured by land cover, with candidate sites and the sensors placed by ${method.name} at sites ${method.chosen.join(', ')}. It can be rotated and zoomed. The same information is in the 2D map.`
+    return `3D landscape of the study area on a sunny day, ground coloured by land cover, with candidate sites and the sensors placed by ${method.name} at sites ${method.chosen.join(', ')}. It can be rotated and zoomed. The same information is in the 2D map.`
   }
   const layerName = LAYERS.find((l) => l.key === layer)?.label ?? layer
   return `3D terrain of the study area, coloured by ${layerName}, with candidate sites and the sensors placed by ${method.name} at sites ${method.chosen.join(', ')}. It can be rotated and zoomed. The same information is in the 2D map.`
@@ -1299,7 +1299,7 @@ export default function Terrain3D({ results, layer, method, onUnavailable }: Pro
                     <p>
                       Ground colours come from ESA WorldCover 2021 land cover and Copernicus elevation. Tree
                       clumps are placed where the data shows tree cover but are illustrative, as are the shading,
-                      sky and sun (not the real time of day).
+                      clouds, sky and sun (not the real weather or time of day).
                     </p>
                   )}
                   <p>

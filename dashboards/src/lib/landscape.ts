@@ -24,13 +24,14 @@ import { LAND_CLASSES, WATER_CODE, pixelAt, type LandcoverData } from './landcov
 import { VERTICAL_EXAGGERATION, sampleHeight, type TerrainMeta } from './terrain'
 
 /**
- * The Landscape layer: ground colours painted from land cover + terrain, a golden-hour sun, a
- * sky backdrop and strata for the side walls. Everything is procedural and deterministic.
+ * The Landscape layer: ground colours painted from land cover + terrain, a late-morning sun, a
+ * daytime sky backdrop with fair-weather clouds and strata for the side walls. Everything is
+ * procedural and deterministic.
  */
 
-// Sun: compass azimuth measured clockwise from north (247.5 = west-south-west), elevation above the horizon.
-const SUN_AZIMUTH = (247.5 * Math.PI) / 180
-const SUN_ELEVATION = (22 * Math.PI) / 180
+// Sun: compass azimuth measured clockwise from north (135 = south-east), elevation above the horizon.
+const SUN_AZIMUTH = (135 * Math.PI) / 180
+const SUN_ELEVATION = (52 * Math.PI) / 180
 
 /** Unit vector from the scene centre towards the sun (x = east, y = up, z = south). */
 export function sunDirection(): Vector3 {
@@ -40,14 +41,16 @@ export function sunDirection(): Vector3 {
 
 /** Light and atmosphere values. Intensities follow three's convention: output = albedo * I * cos / PI. */
 export const LANDSCAPE_LIGHT = {
-  sunColor: '#ffcb94',
-  sunIntensity: 4.8,
-  skyColor: '#8aa0dc',
-  groundColor: '#5d4a3c',
-  hemiIntensity: 1.9,
-  exposure: 1.05,
-  fogColor: '#a9788a',
-  fogDensity: 0.000017,
+  sunColor: '#fff4e0',
+  sunIntensity: 3.9,
+  skyColor: '#b4d0ee',
+  groundColor: '#6b6a45',
+  hemiIntensity: 1.8,
+  exposure: 1.1,
+  fogColor: '#c4d9ec',
+  fogDensity: 0.000012,
+  /** How much of the sun's light a shadowed point loses (1 = fully dark, hemisphere light only). */
+  shadowStrength: 0.75,
 }
 
 // ---------------------------------------------------------------- noise
@@ -72,6 +75,18 @@ function vnoise(x: number, y: number, seed: number): number {
   const c = hash2(ix, iy + 1, seed)
   const d = hash2(ix + 1, iy + 1, seed)
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy
+}
+
+/**
+ * Very soft, static dappling that stands in for cloud shadow: 1 in the open, down to
+ * 1 - CLOUD_SHADOW_DEPTH under a blob. `x` and `z` are scene metres. Illustrative; it does not
+ * line up with the clouds in the sky.
+ */
+const CLOUD_SHADOW_DEPTH = 0.12
+export function cloudShadowAt(x: number, z: number): number {
+  const n = vnoise(x / 3800 + 11.3, z / 3800 + 4.1, 61) * 0.65 + vnoise(x / 1500 + 2.7, z / 1500 + 8.9, 73) * 0.35
+  const k = clamp01((n - 0.5) / 0.22)
+  return 1 - CLOUD_SHADOW_DEPTH * k * k * (3 - 2 * k)
 }
 
 // ---------------------------------------------------------------- ground
@@ -280,7 +295,9 @@ export function paintGround(heights: Float32Array, meta: TerrainMeta, lc: Landco
       const calm = 1 - 0.85 * wWater
       const fine = vnoise(gx * 1.1, gy * 1.1, 7) * 0.65 + vnoise(gx * 2.3, gy * 2.3, 19) * 0.35
       const patch = vnoise(gx * 0.2, gy * 0.2, 31) * 0.6 + vnoise(gx * 0.55, gy * 0.55, 43) * 0.4
-      const lum = (1 + (fine - 0.5) * 0.32 * calm + (patch - 0.5) * 0.26 * calm) * (1 - clamp01(-rg / 40) * 0.16)
+      const dapple = cloudShadowAt((gx / (cols - 1) - 0.5) * meta.width_m, (gy / (rows - 1) - 0.5) * meta.height_m)
+      const lum =
+        (1 + (fine - 0.5) * 0.32 * calm + (patch - 0.5) * 0.26 * calm) * (1 - clamp01(-rg / 40) * 0.16) * dapple
       const hue = (patch - 0.5) * 12 * calm
       const o = (ty * W + tx) * 4
       cImg.data[o] = Math.round(Math.min(255, Math.max(0, (col[0] + hue) * lum)))
@@ -398,22 +415,49 @@ void main() {
 
 // The gradient is a function of the view ray's elevation plus a share of how far the camera
 // looks down, so the horizon band stays near the top of the picture even in the default
-// high-angle view. The warm side and the sun disc use the true ray, so they follow the orbit.
+// high-angle view. Clouds are laid on a plane overhead using that same lifted elevation but the
+// true compass bearing of the ray, so orbiting the camera carries them round with the world
+// (they are not glued to the screen); only their height in the picture follows the camera tilt.
 const SKY_FRAGMENT = /* glsl */ `
 uniform mat4 uInvProj;
 uniform mat4 uCamWorld;
 uniform vec3 uSunDir;
 uniform float uOffsetDeg;
-uniform vec3 uBelow;
+uniform vec3 uHaze;
 uniform vec3 uHorizon;
-uniform vec3 uPink;
-uniform vec3 uViolet;
-uniform vec3 uBlue;
+uniform vec3 uMid;
 uniform vec3 uZenith;
+uniform vec3 uCloudLit;
+uniform vec3 uCloudShade;
 uniform vec3 uGlow;
 varying vec2 vNdc;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+
+float h21(vec2 p) {
+  p = fract(p * vec2(0.1031, 0.1030));
+  p += dot(p, p.yx + 33.33);
+  return fract((p.x + p.y) * p.x);
+}
+
+float vn(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+float fbm(vec2 p) {
+  float a = 0.5;
+  float s = 0.0;
+  mat2 r = mat2(0.8, -0.6, 0.6, 0.8);
+  for (int i = 0; i < 5; i++) {
+    s += a * vn(p);
+    p = r * p * 2.03 + vec2(17.1, 9.7);
+    a *= 0.5;
+  }
+  return s / 0.96875;
+}
 
 void main() {
   vec4 v = uInvProj * vec4(vNdc, 1.0, 1.0);
@@ -421,22 +465,39 @@ void main() {
   vec3 dir = normalize((uCamWorld * vec4(dirView, 0.0)).xyz);
   float d = degrees(asin(clamp(dir.y, -1.0, 1.0))) + uOffsetDeg;
 
-  vec3 c = uBelow;
-  c = mix(c, uHorizon, smoothstep(-34.0, 0.0, d));
-  c = mix(c, uPink, smoothstep(0.0, 6.0, d));
-  c = mix(c, uViolet, smoothstep(3.0, 15.0, d));
-  c = mix(c, uBlue, smoothstep(10.0, 32.0, d));
-  c = mix(c, uZenith, smoothstep(28.0, 60.0, d));
+  // Blue deepening towards the zenith, paling to hazy white-blue at the horizon.
+  vec3 c = mix(uHorizon, uMid, smoothstep(0.0, 11.0, d));
+  c = mix(c, uZenith, smoothstep(8.0, 62.0, d));
+  c = mix(uHaze, c, smoothstep(-26.0, 0.0, d));
 
-  float side = max(dot(normalize(dir.xz + vec2(1e-5)), normalize(uSunDir.xz)), 0.0);
-  float band = (1.0 - smoothstep(0.0, 34.0, d)) * smoothstep(-30.0, 0.0, d);
-  c = mix(c, uGlow, pow(side, 3.0) * band * 0.45);
-
+  // Sun glow and disc (the disc rarely shows: the default view looks down at the land).
   float cs = max(dot(dir, uSunDir), 0.0);
-  c += uGlow * (pow(cs, 14.0) * 0.45 + pow(cs, 90.0) * 0.5);
-  c = mix(c, vec3(1.0, 0.93, 0.8), smoothstep(0.99985, 0.99996, cs));
+  c += uGlow * (pow(cs, 8.0) * 0.16 + pow(cs, 120.0) * 0.55);
 
-  c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
+  // Fair-weather cumulus: denser and smaller towards the horizon, sparse overhead.
+  float e = radians(max(d, 0.0));
+  vec2 az = normalize(dir.xz + vec2(1e-5));
+  vec2 p = az * cos(e) / (sin(e) + 0.11);
+  float near = 1.0 - smoothstep(4.0, 62.0, d);
+  vec2 q = p * 0.72 + vec2(3.7, 1.3);
+  float n = fbm(q);
+  float cover = mix(0.68, 0.47, near);
+  float dens = smoothstep(cover, cover + 0.15, n);
+  vec2 toSun = normalize(uSunDir.xz + vec2(1e-5));
+  float n2 = fbm(q + toSun * 0.09);
+  float lit = clamp(0.6 + (n - n2) * 6.0, 0.0, 1.0);
+  float core = smoothstep(cover + 0.05, cover + 0.4, n);
+  lit = clamp(lit - core * 0.5, 0.0, 1.0);
+  vec3 cloud = mix(uCloudShade, uCloudLit, lit);
+  // The farthest clouds melt into the haze.
+  float far = 1.0 - smoothstep(0.0, 9.0, d);
+  cloud = mix(cloud, uHorizon, far * 0.4);
+  float alpha = dens * smoothstep(0.0, 3.0, d) * 0.96;
+  c = mix(c, cloud, alpha);
+
+  c = mix(c, vec3(1.0, 0.98, 0.93), smoothstep(0.99985, 0.99996, cs) * (1.0 - alpha));
+
+  c += (hash(gl_FragCoord.xy) + hash(gl_FragCoord.yx + 7.3) - 1.0) / 255.0;
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
 }`
@@ -461,13 +522,13 @@ export function buildSky(): Sky {
       uCamWorld: { value: new Matrix4() },
       uSunDir: { value: sunDir },
       uOffsetDeg: { value: 0 },
-      uBelow: { value: lin('#1d1a38') },
-      uHorizon: { value: lin('#d98a6c') },
-      uPink: { value: lin('#b0658a') },
-      uViolet: { value: lin('#5a4a8f') },
-      uBlue: { value: lin('#233a78') },
-      uZenith: { value: lin('#0d1a3e') },
-      uGlow: { value: lin('#ff9a55') },
+      uHaze: { value: lin(LANDSCAPE_LIGHT.fogColor) },
+      uHorizon: { value: lin('#cfe1f0') },
+      uMid: { value: lin('#4a8fdc') },
+      uZenith: { value: lin('#1d57b5') },
+      uCloudLit: { value: lin('#ffffff') },
+      uCloudShade: { value: lin('#8696b2') },
+      uGlow: { value: lin('#fff1cf') },
     },
   })
   const mesh = new Mesh(new PlaneGeometry(2, 2), material)
@@ -540,7 +601,8 @@ export function fitSun(sun: DirectionalLight, halfW: number, halfH: number, base
   sun.shadow.mapSize.set(mapSize, mapSize)
   sun.shadow.bias = -0.0004
   sun.shadow.normalBias = 9
-  sun.shadow.radius = 2.5
+  sun.shadow.radius = 3.5
+  sun.shadow.intensity = LANDSCAPE_LIGHT.shadowStrength
 }
 
 // ---------------------------------------------------------------- canopy
@@ -625,7 +687,8 @@ export function buildCanopy(heights: Float32Array, meta: TerrainMeta, lc: Landco
       const base = forestRamp(t)
       const sparse = clamp01((0.9 - tf) / 0.6) * 0.55
       const v = 1 + (hash2(i, j, CANOPY_SEED + 6) - 0.5) * 2 * CANOPY_VALUE_JITTER
-      for (let k = 0; k < 3; k++) rgb[k] = mix(base[k], SPARSE_TREE[k], sparse) * v
+      const dapple = cloudShadowAt(x, z)
+      for (let k = 0; k < 3; k++) rgb[k] = mix(base[k], SPARSE_TREE[k], sparse) * v * dapple
       c.setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, SRGBColorSpace)
       mesh.setColorAt(n, c)
       n++

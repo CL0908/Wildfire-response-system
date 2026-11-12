@@ -35,7 +35,7 @@ export default function LandscapeLegend({ classes }: Props) {
           Chosen sensor
         </li>
       </ul>
-      <p className="land-note">Land cover and elevation are real. Trees, sun and sky are illustrative.</p>
+      <p className="land-note">Land cover and elevation are real. Trees, clouds, sun and sky are illustrative.</p>
     </div>
   )
 }

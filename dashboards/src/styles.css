@@ -798,6 +798,39 @@ td.has-std {
   }
 }
 
+/*
+ * Landscape in 3D is a bright daytime scene, so the dark-stage helpers are strengthened here:
+ * glass is more opaque and the title sits on its own glass backing instead of the dark scrim.
+ * Data layers and the 2D map keep the dark stage and are unaffected.
+ */
+.stage.look-day {
+  --glass-bg: rgba(11, 18, 32, 0.84);
+  --glass-line: rgba(255, 255, 255, 0.16);
+}
+
+.stage.look-day .stage-scrim {
+  display: none;
+}
+
+.stage.look-day .stage-title {
+  top: 12px;
+  left: 12px;
+  padding: 8px 12px 10px;
+  background: rgba(11, 18, 32, 0.78);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+  text-shadow: none;
+}
+
+@media (max-width: 719px) {
+  .stage.look-day .stage-title {
+    top: 10px;
+    left: 12px;
+  }
+}
+
 .glass {
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(10px);

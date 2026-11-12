@@ -83,7 +83,7 @@ function Dashboard({ results }: { results: Results }) {
       <a className="skip-link" href="#results">
         Skip to results
       </a>
-      <section ref={stageRef} className={`stage${view === '2d' ? ' view-2d' : ''}${fellBack ? ' has-notice' : ''}`} aria-label="Map">
+      <section ref={stageRef} className={`stage${view === '2d' ? ' view-2d' : ''}${fellBack ? ' has-notice' : ''}${view === '3d' && layer === 'landscape' ? ' look-day' : ''}`} aria-label="Map">
         <div className="stage-scrim" aria-hidden="true" />
         <header ref={titleRef} className="stage-title">
           <h1>Q-Pithak</h1>
