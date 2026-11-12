@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState, type ComponentType } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from 'react'
 import { useResults } from './lib/data'
 import { formatDate, formatRange } from './lib/format'
 import type { LayerKey, Results } from './types'
@@ -6,11 +6,14 @@ import type Terrain3DView from './components/Terrain3D'
 import MapView from './components/MapView'
 import LayerSwitch from './components/LayerSwitch'
 import ViewSwitch, { type ViewMode } from './components/ViewSwitch'
+import ControlCard from './components/ControlCard'
 import MethodPicker from './components/MethodPicker'
 import MethodDetail from './components/MethodDetail'
 import Benchmark from './components/Benchmark'
+import Placement from './components/Placement'
 import DataSources from './components/DataSources'
 import Hardware from './components/Hardware'
+import Footer from './components/Footer'
 import { useHardware } from './lib/hardware'
 import { availableLayers } from './lib/layers'
 
@@ -19,9 +22,11 @@ type Terrain3DProps = Parameters<typeof Terrain3DView>[0]
 function ChunkFailed({ onUnavailable }: Pick<Terrain3DProps, 'onUnavailable'>) {
   useEffect(() => onUnavailable?.(), [onUnavailable])
   return (
-    <p role="alert" className="error">
-      The 3D view could not be loaded. The 2D map is still available.
-    </p>
+    <div className="stage-msg">
+      <p role="alert" className="error">
+        The 3D view could not be loaded. The 2D map is still available.
+      </p>
+    </div>
   )
 }
 
@@ -53,69 +58,97 @@ function Dashboard({ results }: { results: Results }) {
   const { grid } = results
   const hardware = useHardware()
   const layerInfos = availableLayers(results.layers)
+  // The 2D panel starts below the title block, whatever height the title wraps to.
+  const stageRef = useRef<HTMLElement>(null)
+  const titleRef = useRef<HTMLElement>(null)
+  useLayoutEffect(() => {
+    const stage = stageRef.current
+    const title = titleRef.current
+    if (!stage || !title) return
+    const measure = () => stage.style.setProperty('--title-bottom', `${Math.ceil(title.offsetTop + title.offsetHeight)}px`)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(title)
+    return () => observer.disconnect()
+  }, [])
   const terrainFacts =
     results.terrain === 'real'
       ? 'real elevation, fire history and land cover; modelled hazard'
       : 'synthetic terrain'
 
   return (
-    <div className="page">
-      <header className="header">
-        <h1>Q-Pithak</h1>
-        <p>
-          Sensor placement, Khao Yai National Park, north-west edge · {terrainFacts} ·{' '}
-          {grid.rows} × {grid.cols} grid of {grid.cell_size_m} m cells · {results.mast_height_m} m
-          masts, {formatRange(results.range_m)} range · generated{' '}
-          {formatDate(results.generated)}
-        </p>
-      </header>
-      <main className="layout">
-        <section className="map-col" aria-label="Map">
-          <ViewSwitch value={view} onChange={pickView} />
-          <LayerSwitch layers={layerInfos} value={layer} onChange={setLayer} />
-          {fellBack && (
-            <p role="status" className="muted">
-              The 3D view could not be loaded, so the 2D map is shown.
-            </p>
-          )}
-          {view === '2d' ? (
-            <MapView results={results} layer={layer} method={method} />
-          ) : (
-            <Suspense
-              fallback={
-                <div className="terrain3d">
-                  <div className="terrain-box">
-                    <p role="status" className="terrain-msg muted">
-                      Loading 3D view…
-                    </p>
-                  </div>
-                </div>
-              }
-            >
-              <Terrain3D
-                results={results}
-                layer={layer}
-                method={method}
-                onUnavailable={!picked ? fallBackTo2D : undefined}
-              />
-            </Suspense>
-          )}
-          <DataSources results={results} />
-        </section>
-        <div className="side-col">
-          <section aria-label="Methods">
-            <MethodPicker
-              results={results}
-              selected={methodIndex}
-              onSelect={setMethodIndex}
-            />
+    <>
+      <a className="skip-link" href="#results">
+        Skip to results
+      </a>
+      <section ref={stageRef} className={`stage${view === '2d' ? ' view-2d' : ''}${fellBack ? ' has-notice' : ''}`} aria-label="Map">
+        <div className="stage-scrim" aria-hidden="true" />
+        <header ref={titleRef} className="stage-title">
+          <h1>Q-Pithak</h1>
+          <p>Wildfire sensor placement · Khao Yai National Park</p>
+          <p className="stage-meta">
+            North-west edge · {terrainFacts} · {grid.rows} × {grid.cols} grid of {grid.cell_size_m} m
+            cells · {results.mast_height_m} m masts, {formatRange(results.range_m)} range · generated{' '}
+            {formatDate(results.generated)}
+          </p>
+        </header>
+        <ControlCard>
+          <div className="card-section inline">
+            <span className="card-label" aria-hidden="true">
+              View
+            </span>
+            <ViewSwitch value={view} onChange={pickView} />
+          </div>
+          <div className="card-section">
+            <span className="card-label" aria-hidden="true">
+              Layer
+            </span>
+            <LayerSwitch layers={layerInfos} value={layer} onChange={setLayer} />
+          </div>
+          <div className="card-section">
+            <MethodPicker results={results} selected={methodIndex} onSelect={setMethodIndex} />
             <MethodDetail results={results} method={method} />
-          </section>
-          <Benchmark rows={results.benchmark} />
-          {hardware && <Hardware data={hardware} />}
-        </div>
+          </div>
+        </ControlCard>
+        {view === '2d' ? (
+          <div className="stage-2d">
+            <div className="panel-2d">
+              <MapView results={results} layer={layer} method={method} />
+            </div>
+          </div>
+        ) : (
+          <Suspense
+            fallback={
+              <div className="stage-msg">
+                <p role="status">Loading 3D view…</p>
+              </div>
+            }
+          >
+            <Terrain3D
+              results={results}
+              layer={layer}
+              method={method}
+              onUnavailable={!picked ? fallBackTo2D : undefined}
+            />
+          </Suspense>
+        )}
+        {fellBack && (
+          <p role="status" className="stage-notice glass">
+            The 3D view could not be loaded, so the 2D map is shown.
+          </p>
+        )}
+        <a className="results-link glass" href="#results">
+          Results <span aria-hidden="true">↓</span>
+        </a>
+      </section>
+      <main id="results" className="results" tabIndex={-1}>
+        <Placement results={results} method={method} />
+        <Benchmark rows={results.benchmark} />
+        {hardware && <Hardware data={hardware} />}
+        <DataSources results={results} />
       </main>
-    </div>
+      <Footer generated={results.generated} />
+    </>
   )
 }
 
@@ -123,19 +156,25 @@ export default function App() {
   const state = useResults()
   if (state.status === 'loading') {
     return (
-      <div className="page">
-        <p role="status">Loading results.json…</p>
-      </div>
+      <section className="stage" aria-label="Map">
+        <div className="stage-msg">
+          <p role="status">Loading results.json…</p>
+        </div>
+      </section>
     )
   }
   if (state.status === 'error') {
     return (
-      <div className="page">
-        <h1>Q-Pithak</h1>
-        <p role="alert" className="error">
-          {state.message}
-        </p>
-      </div>
+      <section className="stage">
+        <header className="stage-title">
+          <h1>Q-Pithak</h1>
+        </header>
+        <div className="stage-msg">
+          <p role="alert" className="error">
+            {state.message}
+          </p>
+        </div>
+      </section>
     )
   }
   return <Dashboard results={state.results} />

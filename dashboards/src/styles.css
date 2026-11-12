@@ -6,6 +6,24 @@
   --line: #dfe2e6;
   --accent: #c2410c;
   --radius: 6px;
+  --stage-bg-1: #111c2e;
+  --stage-bg-2: #070b12;
+  --terrain-skirt: #2b3a52;
+  --glass-bg: rgba(15, 23, 42, 0.72);
+  --glass-line: rgba(255, 255, 255, 0.1);
+  --on-dark: #f1f5f9;
+  --on-dark-muted: #cbd5e1;
+  --ring: #fdba74;
+  --c-ink: #0f172a;
+  --c-muted: #475569;
+  --c-hair: #e2e8f0;
+  --c-page: #f8fafc;
+  --c-surface: #ffffff;
+  --s-classical: #243f6e;
+  --s-quantum: #c2410c;
+  /* Darker than the brief's #94a3b8, which is only 2.45:1 on the page; this is 3.49:1. */
+  --s-baseline: #78879c;
+  --s-ref: rgba(15, 23, 42, 0.4);
   color-scheme: light;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
     sans-serif;
@@ -21,7 +39,7 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--c-page);
 }
 
 h1,
@@ -34,52 +52,6 @@ fieldset,
 ul {
   margin: 0;
   padding: 0;
-}
-
-.page {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 32px 32px 56px;
-}
-
-.header {
-  margin-bottom: 32px;
-}
-
-.header h1 {
-  font-size: 1.6rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.header p,
-.muted {
-  color: var(--muted);
-}
-
-.header p {
-  margin-top: 4px;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 540px);
-  gap: 40px;
-  align-items: start;
-}
-
-.map-col {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-}
-
-.side-col {
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
-  min-width: 0;
 }
 
 .sr-only {
@@ -231,23 +203,12 @@ ul {
   font-weight: 650;
 }
 
-.method-head,
 .method-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 6.5em 5.5em;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: baseline;
   padding: 8px 12px;
-}
-
-.method-head {
-  font-size: 0.82rem;
-  color: var(--muted);
-  padding-top: 0;
-  padding-bottom: 4px;
-}
-
-.method-row {
   position: relative;
   border: 1px solid transparent;
   border-top-color: var(--line);
@@ -314,22 +275,7 @@ ul {
   background: #f1f1ed;
 }
 
-/* Benchmark */
-.benchmark,
-.data,
-.hardware {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.benchmark h2,
-.data h2,
-.hardware h2 {
-  font-size: 1.1rem;
-  font-weight: 650;
-}
-
+/* Results: one column, one type scale (13 / 15 / 17 / 22 / 30), one spacing scale */
 .table-wrap {
   overflow-x: auto;
 }
@@ -337,20 +283,20 @@ ul {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 13px;
 }
 
 caption {
   caption-side: top;
   text-align: left;
-  color: var(--muted);
-  padding-bottom: 8px;
+  color: var(--c-muted);
+  padding-bottom: 12px;
 }
 
 th,
 td {
-  padding: 7px 6px;
-  border-bottom: 1px solid var(--line);
+  padding: 8px;
+  border-bottom: 1px solid var(--c-hair);
 }
 
 td,
@@ -378,41 +324,8 @@ td.has-std {
 }
 
 .pm {
-  color: var(--muted);
-  font-size: 0.85em;
-}
-
-/* Data block */
-.data {
-  margin-top: 8px;
-  font-size: 0.9rem;
-}
-
-.data-list,
-.attribution {
-  padding-left: 18px;
-}
-
-.attribution {
-  color: var(--muted);
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-.attribution li + li {
-  margin-top: 4px;
-}
-
-/* Hardware run */
-.run {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.run h3 {
-  font-size: 1rem;
-  font-weight: 650;
+  color: var(--c-muted);
+  font-size: 13px;
 }
 
 .hw-table thead th {
@@ -432,73 +345,966 @@ td.has-std {
   background: var(--surface);
 }
 
-@media (max-width: 900px) {
-  .page {
-    padding: 20px 16px 40px;
-  }
-  .layout {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 32px;
-  }
+
+/* Results below the stage */
+.results {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 96px 24px;
+  color: var(--c-ink);
+  font-size: 15px;
+  line-height: 1.5;
 }
 
-/* 3D terrain view */
-.view-switch {
-  max-width: 200px;
+.results:focus {
+  outline: none;
 }
 
-.terrain3d {
+.results > section {
   display: flex;
   flex-direction: column;
+  gap: 24px;
+}
+
+.results > section + section {
+  margin-top: 48px;
+  padding-top: 48px;
+  border-top: 1px solid var(--c-hair);
+}
+
+.results h2 {
+  max-width: 30em;
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 650;
+}
+
+.results h3 {
+  font-size: 17px;
+  line-height: 1.3;
+  font-weight: 650;
+}
+
+.sec-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lede {
+  max-width: 64ch;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--c-muted);
+}
+
+.method-note,
+.results .muted,
+.results .attribution {
+  max-width: 64ch;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-muted);
+}
+
+.results details > summary {
+  width: fit-content;
+  padding: 8px 0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.results details[open] > summary {
+  margin-bottom: 8px;
+}
+
+.results summary:focus-visible,
+.results .table-wrap:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+/* Big figures */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+}
+
+.figures > div {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.figures dd {
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.figures .of {
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--c-muted);
+}
+
+.figures dt {
+  font-size: 13px;
+  color: var(--c-muted);
+}
+
+/* Charts */
+.chart-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chart-box,
+.panels {
+  width: 100%;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  list-style: none;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+
+.chart-legend li {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.terrain-box {
-  position: relative;
-  width: 100%;
-  max-width: 620px;
-  aspect-ratio: 1;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  overflow: hidden;
+.panels {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.terrain-box canvas {
+.panels.wide {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.panel h3 {
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.chart {
+  display: block;
+  max-width: none;
+  overflow: visible;
+}
+
+.chart text {
+  font-size: 13px;
+  fill: var(--c-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart text.ink {
+  fill: var(--c-ink);
+}
+
+.chart text.strong {
+  fill: var(--c-ink);
+  font-weight: 650;
+}
+
+.chart text.on-bar {
+  fill: #fff;
+}
+
+.chart .grid {
+  stroke: var(--c-hair);
+  stroke-width: 1;
+}
+
+.chart .ref {
+  stroke: var(--s-ref);
+  stroke-width: 1.5;
+}
+
+.chart .lead {
+  stroke: rgba(15, 23, 42, 0.2);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.chart text.halo {
+  paint-order: stroke;
+  stroke: var(--c-page);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+/* Hardware: facts per run, tables behind details */
+.run-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 24px 48px;
+}
+
+.run-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.run-facts h3 {
+  font-size: 15px;
+}
+
+.run-facts dl {
+  display: flex;
+  flex-direction: column;
+}
+
+.run-facts dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 11em) minmax(0, 1fr);
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--c-hair);
+}
+
+.run-facts dt {
+  font-size: 13px;
+  color: var(--c-muted);
+}
+
+.run-facts dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.run-tables {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Data: real and modelled side by side */
+.data-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 24px 48px;
+}
+
+.data-cols h3 {
+  margin-bottom: 8px;
+}
+
+.data-list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.data-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--c-hair);
+}
+
+.src-name {
+  font-weight: 600;
+}
+
+.src-what {
+  font-size: 13px;
+  color: var(--c-muted);
+}
+
+.data-cols .muted {
+  margin-top: 8px;
+}
+
+.attribution {
+  list-style: none;
+}
+
+.attribution li + li {
+  margin-top: 4px;
+}
+
+.site-footer {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px 48px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--c-muted);
+}
+
+.site-footer a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.site-footer a:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+@media (max-width: 560px) {
+  .run-facts dl > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .site-footer {
+    padding: 0 16px 32px;
+  }
+}
+
+.skip-link {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 20;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Stage: the map fills the first screen, controls float over it */
+.stage {
+  --stage-h: max(560px, 100vh);
+  position: relative;
+  height: 100vh;
+  height: 100svh;
+  min-height: 560px;
+  overflow: hidden;
+  color: var(--on-dark);
+  background: radial-gradient(ellipse at 50% 45%, var(--stage-bg-1), var(--stage-bg-2) 78%);
+}
+
+@supports (height: 100svh) {
+  .stage {
+    --stage-h: max(560px, 100svh);
+  }
+}
+
+.stage :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.stage .muted {
+  color: var(--on-dark-muted);
+}
+
+/* Keeps the two title lines at 4.5:1 or better even if white terrain passes behind them. */
+.stage-scrim {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: min(100%, 640px);
+  height: 260px;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(7, 11, 18, 0.94) 0,
+    rgba(7, 11, 18, 0.9) 30%,
+    rgba(7, 11, 18, 0.6) 60%,
+    rgba(7, 11, 18, 0) 100%
+  );
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 70%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 70%, transparent 100%);
+}
+
+.view-2d .stage-scrim {
+  display: none;
+}
+
+.stage-title {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  z-index: 3;
+  /* Stays left of the "N" label, which sits above the middle of the free area. */
+  max-width: min(420px, calc((100% - 352px) / 2 - 48px));
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 12px rgba(0, 0, 0, 0.8);
+}
+
+.stage-title h1 {
+  font-size: 1.7rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.stage-title p {
+  margin-top: 4px;
+}
+
+.stage-meta {
+  font-size: 0.8rem;
+  color: var(--on-dark-muted);
+}
+
+/* The 2D map has no "N" label above the middle, so the title may run up to the control card. */
+@media (min-width: 1000px) {
+  .view-2d .stage-title {
+    max-width: calc(100% - 376px);
+  }
+}
+
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+  color: var(--on-dark);
+}
+
+/* Canvas and 3D overlays */
+.stage-3d {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+}
+
+.stage-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+}
+
+.stage-canvas canvas {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.terrain-msg {
+.stage-msg {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
   text-align: center;
+  pointer-events: none;
+  color: var(--on-dark-muted);
 }
 
-.terrain-note {
-  max-width: 620px;
-  font-size: 0.9rem;
+.stage-msg .error {
+  max-width: 420px;
+  margin: 0;
+  border-radius: 8px;
+  color: var(--ink);
+}
+
+.stage-notice {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 4;
+  max-width: calc(100% - 32px);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.icon-btn,
+.chip-btn,
+.results-link,
+.controls-open,
+.sheet-close {
+  font: inherit;
+  cursor: pointer;
+  color: var(--on-dark);
+  text-decoration: none;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+  border-radius: 10px;
+}
+
+.icon-btn:hover,
+.chip-btn:hover,
+.results-link:hover,
+.controls-open:hover {
+  background: rgba(30, 41, 59, 0.85);
+}
+
+.stage-zoom {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 4;
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.stage-info {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 4;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 8px;
+  width: 440px;
+  max-width: calc(50% - 90px);
+  pointer-events: none;
 }
 
-.terrain-note p {
-  margin: 0;
+.stage-chip {
+  width: 100%;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.85rem;
+  pointer-events: auto;
 }
 
-.terrain-hint {
+.stage-chip .legends {
+  gap: 4px 16px;
+  font-size: 0.85rem;
+}
+
+.stage-chip .readout {
+  min-height: 0;
+}
+
+.about {
+  position: relative;
+  pointer-events: auto;
+}
+
+.chip-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 0.85rem;
+  border-radius: 18px;
+}
+
+.about-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: min(340px, calc(100vw - 32px));
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.85rem;
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.terrain-hint,
+.about-legend {
   display: none;
 }
 
 @media (pointer: coarse) {
   .terrain-hint {
     display: block;
+  }
+  .mouse-hint {
+    display: none;
+  }
+}
+
+.results-link {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 4;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+/* Control card */
+.stage-card {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+  width: 320px;
+  max-height: calc(100% - 88px);
+  overflow: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+/* The part that scrolls when the card is taller than the stage; ControlCard ends it between blocks. */
+.card-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40px;
+  border-radius: 0 0 12px 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  background: linear-gradient(to bottom, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.96));
+}
+
+.card-fade[data-more='true'] {
+  opacity: 1;
+}
+
+.card-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.card-section.inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-label,
+.stage-card .methods legend {
+  padding: 0;
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--on-dark-muted);
+}
+
+.stage-card .methods {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stage-card .methods legend {
+  margin-bottom: 6px;
+}
+
+.stage-card .segmented {
+  max-width: none;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.stage-card .segmented span {
+  padding: 5px 8px;
+  font-size: 0.85rem;
+  background: rgba(15, 23, 42, 0.55);
+  color: var(--on-dark);
+}
+
+.stage-card .segmented label:hover span {
+  background: rgba(51, 65, 85, 0.8);
+}
+
+.stage-card .segmented input:checked + span {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.stage-card .segmented input:focus-visible + span {
+  outline: 2px solid var(--ring);
+  outline-offset: -3px;
+}
+
+.stage-card .view-switch {
+  width: 160px;
+}
+
+.stage-card .method-row {
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.stage-card .method-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.stage-card .method-row:has(input:checked) {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: #e2e8f0;
+}
+
+.stage-card .method-row:has(input:focus-visible) {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.stage-card .method-name .muted {
+  font-size: 0.78rem;
+}
+
+.stage-card .detail {
+  margin-top: 8px;
+  gap: 8px;
+}
+
+.stage-card .stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.stage-card .stats dt {
+  font-size: 0.72rem;
+  color: var(--on-dark-muted);
+}
+
+.stage-card .stats dd {
+  font-size: 0.9rem;
+}
+
+.stage-card .note {
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  border-left-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.controls-open {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 650;
+}
+
+.sheet-close {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--glass-line);
+}
+
+/* 2D map inside the stage */
+.stage-2d {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Below the title block, whose bottom edge App measures into --title-bottom. */
+  --top-2d: calc(var(--title-bottom, 76px) + 12px);
+  padding: var(--top-2d) 368px 64px 16px;
+}
+
+.panel-2d {
+  /* Panel width: the free width, or whatever keeps the map, readout and legend inside the stage height. */
+  --panel-pad: 16px;
+  width: min(100%, calc(var(--stage-h) - var(--top-2d) - 64px - 210px));
+  max-height: 100%;
+  overflow: auto;
+  padding: var(--panel-pad);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+}
+
+.panel-2d .map-svg {
+  max-width: none;
+}
+
+.panel-2d .readout {
+  min-height: 0;
+}
+
+.panel-2d .muted {
+  color: var(--muted);
+}
+
+.panel-2d :focus-visible {
+  outline: 2px solid var(--accent);
+}
+
+@media (min-width: 1100px) {
+  /* Map on the left, readout and legend beside it. */
+  .panel-2d {
+    width: min(100%, calc(var(--stage-h) - var(--top-2d) - 64px + 16px + 260px));
+  }
+  .panel-2d .map {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    grid-template-rows: auto 1fr;
+    column-gap: 16px;
+    row-gap: 12px;
+    align-items: start;
+  }
+  .panel-2d .map-svg {
+    grid-row: 1 / span 2;
+    grid-column: 1;
+  }
+  .panel-2d .readout {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .panel-2d .legends {
+    grid-column: 2;
+    grid-row: 2;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .panel-2d .legend {
+    flex-wrap: wrap;
+  }
+}
+
+/* Below 1000 px the controls are a button and a bottom sheet (SHEET_QUERY in lib/stageLayout.ts). */
+@media (max-width: 999.98px) {
+  .stage-title {
+    max-width: calc(50% - 48px);
+  }
+  .stage-info {
+    bottom: 64px;
+    max-width: calc(100% - 32px);
+  }
+  .stage-2d {
+    padding: var(--top-2d) 16px 64px;
+  }
+  /* Above the Results link, which sits at the same bottom offset. */
+  .stage-notice {
+    bottom: 64px;
+  }
+  .has-notice .stage-2d {
+    padding-bottom: 112px;
+  }
+  .stage-card.stage-sheet {
+    top: auto;
+    left: auto;
+    right: 16px;
+    bottom: 0;
+    width: min(420px, calc(100% - 32px));
+    max-height: min(70svh, calc(100% - 56px));
+    border-radius: 16px 16px 0 0;
+    border-bottom: 0;
+    padding-bottom: 20px;
+    background: rgba(15, 23, 42, 0.94);
+  }
+  .stage-sheet:focus {
+    outline: none;
+  }
+}
+
+@media (max-width: 719px) {
+  .stage-title {
+    top: 16px;
+    left: 16px;
+    max-width: calc(100% - 140px);
+  }
+  .stage-title h1 {
+    font-size: 1.3rem;
+  }
+  .stage-title p {
+    font-size: 0.8rem;
+  }
+  .stage-meta {
+    display: none;
+  }
+  .stage-2d {
+    padding: var(--top-2d) 16px 64px;
+  }
+  .stage-zoom {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stage-info {
+    right: 72px;
+    max-width: none;
+    width: auto;
+  }
+  .stage-chip {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .stage-chip .key {
+    display: none;
+  }
+  .stage-card.stage-sheet {
+    left: 0;
+    right: 0;
+    width: auto;
+  }
+  .has-notice .stage-2d {
+    padding-bottom: 130px;
+  }
+  .about-legend {
+    display: block;
+  }
+  .results {
+    padding: 64px 16px;
+  }
+  .results > section + section {
+    margin-top: 32px;
+    padding-top: 32px;
+  }
+  .results h2 {
+    font-size: 22px;
+    line-height: 1.25;
   }
 }

@@ -35,7 +35,7 @@ RUNS = [
         program="program.qasm",
         counts=lambda d: d["resultData"]["measurementCounts"],
         note="Same instance with the cost function fixed and every gate angle under one full turn. "
-             "More shots place 2 sensors than in June, but the average shot is still well below "
+             "A larger share of shots place 2 sensors than in June, but the average shot is still well below "
              "a random 2-sensor placement.",
     ),
 ]

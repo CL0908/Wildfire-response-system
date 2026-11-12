@@ -11,11 +11,6 @@ export default function MethodPicker({ results, selected, onSelect }: Props) {
   return (
     <fieldset className="methods">
       <legend>Method</legend>
-      <div className="method-head" aria-hidden="true">
-        <span />
-        <span className="num">% of optimum</span>
-        <span className="num">Objective</span>
-      </div>
       {results.methods.map((m, i) => (
         <label key={m.name} className="method-row">
           <input
@@ -33,8 +28,10 @@ export default function MethodPicker({ results, selected, onSelect }: Props) {
                 : m.kind}
             </span>
           </span>
-          <span className="num">{formatPercent(m.objective / results.optimum)}</span>
-          <span className="num">{m.objective.toFixed(2)}</span>
+          <span className="num">
+            {formatPercent(m.objective / results.optimum)}
+            <span className="sr-only"> of optimum</span>
+          </span>
         </label>
       ))}
     </fieldset>

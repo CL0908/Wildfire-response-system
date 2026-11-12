@@ -4,6 +4,10 @@ Single-page view of the sensor-placement results for Khao Yai National Park, in 
 
 With real terrain the map shows elevation, fire history and land cover for the north-west edge of the park, with modelled hazard and value; the Data block lists sources and required attribution. If `results.json` has `terrain: "synthetic"`, the page says so and omits the real-data layers and attribution. QAOA results come from a simulator. There is no live sensor data. The benchmark shows no quantum advantage: the classical methods match or beat every QAOA variant, and the page checks this against the data before saying so.
 
+## Layout
+
+The first screen is the map at full window size, with a floating card for the view (2D or 3D), data layer and method. Scrolling moves down the page; hold Ctrl (⌘ on Mac) and scroll, pinch, or use the buttons to zoom. Below it, one column of four sections: the selected placement, the benchmark, the hardware runs and the data sources. Each section's heading is a sentence computed from the data, and the full tables sit behind "Show the numbers". In the method charts a QAOA bar is the average shot; the best of 2,000 shots is a separate open marker.
+
 ## Data
 
 The page reads these files from `public/`, all written by Python. From the repo root:
