@@ -1,5 +1,4 @@
 """Priority surface: synthetic mode must not change; real mode must be consistent and correct."""
-import hashlib
 import os
 import sys
 
@@ -11,40 +10,23 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import priority_surface as ps
 from priority_surface import build_priority_surface
 
-# sha256 of the raw bytes of each array, recorded before real-terrain mode was added.
-FINGERPRINTS = {
-    (20, 20, 42): dict(
-        priority="afd85258ebf57af982f24e65f5d0b70dd53f90b4707754756bd12d92f59494ec",
-        dem_m="36bda75d4441081ab20af6b035e95d33e5aa8712012f29bb72dd7acb73a2e37e",
-        hazard="26bf534b28cbd80532db4de4456256c1a8fec0b0744fcabbc9bbbf761523f72e",
-        value="12472222cc179f7c24d28ab674d7e550d5e5b631265814132eaf1c2ad08bfc5a",
-    ),
-    (20, 20, 7): dict(
-        priority="0f3ad085b7e0f777b54203d42a0985f28862e34f8dc1242e5443b2067cf902f6",
-        dem_m="fa9ebf1eac552a74e52f43789dd61ad561675c8ca0aa9cbe8139485f571fdc67",
-        hazard="e2d095bed0d0529aece4dfe4bb8ac47d05aec43c53b6b2401fe9c88bc1ccdd1b",
-        value="4642a49f34a1499ad89d8989884242d503aee62946fdb08e1a191d350a751958",
-    ),
-    (20, 20, 13): dict(
-        priority="8e6133c20a4ad547d4fce4aa164b6fed19bee185ced61a4d8d9d1523b0a5f532",
-        dem_m="8d31d2086e1e443443269fd664187448e7f61c0b99b8400d34f1f960789f47d9",
-        hazard="34bbf074e0af3ed6a1ac565a7ca8bfbc4887e327e04bd2719c7d574b736b1806",
-        value="4e90e15591de6b352d608d0122550fabbc4025f37de01878ed27364d6b2fccb2",
-    ),
-    (15, 15, 42): dict(
-        priority="a7083c891888bec1a98dd32671bfd3584c787791dde371600052a0c9fe15f0af",
-        dem_m="ad380085d1016fedf0de1b1e2fe195416f912bd4d450fb2a4e6888c94964538d",
-        hazard="4a16e54d39498bd9156be8d9b11e77b8d14ea2f79c475b6ca1d12c88dcf87c98",
-        value="83ab2dd9594f8f2e4b4fb7b1a8b73a9f7447268ad70e1e95009b672880f7bc62",
-    ),
-}
+# Arrays recorded before real-terrain mode was added. Compared with a tolerance, not by hash:
+# floating-point results differ in the last bits between macOS and Linux.
+REFERENCE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "synthetic_surfaces.npz")
+REFERENCE_CASES = [(20, 20, 42), (20, 20, 7), (20, 20, 13), (15, 15, 42)]
 
 
 LAYER_KEYS = ["priority", "dem_m", "hazard", "value"]
 
 
-def _digest(a):
-    return hashlib.sha256(a.tobytes()).hexdigest()
+@pytest.fixture(scope="module")
+def reference():
+    with np.load(REFERENCE_PATH) as z:
+        return {k: z[k] for k in z.files}
+
+
+def _same(a, b):
+    return a.shape == b.shape and np.allclose(a, b, rtol=1e-9, atol=1e-9)
 
 
 @pytest.fixture(scope="module")
@@ -58,24 +40,24 @@ def full():
     return build_priority_surface(40, 40, window=(0, 0), source="real")
 
 
-@pytest.mark.parametrize("args", list(FINGERPRINTS))
-def test_synthetic_unchanged(args):
+@pytest.mark.parametrize("args", REFERENCE_CASES)
+def test_synthetic_unchanged(args, reference):
     rows, cols, seed = args
     surf = build_priority_surface(rows, cols, seed, source="synthetic")
-    for k, expected in FINGERPRINTS[args].items():
-        assert _digest(surf[k]) == expected, k
+    for k in LAYER_KEYS:
+        assert _same(surf[k], reference[f"{rows}_{cols}_{seed}_{k}"]), k
     assert surf["source"] == "synthetic" and surf["window"] is None
 
 
-def test_synthetic_positional_call_unchanged():
+def test_synthetic_positional_call_unchanged(reference):
     a = build_priority_surface(20, 20, 42, None, 500.0, source="synthetic")
-    assert _digest(a["priority"]) == FINGERPRINTS[(20, 20, 42)]["priority"]
+    assert _same(a["priority"], reference["20_20_42_priority"])
 
 
-def test_synthetic_weights_names_still_work():
+def test_synthetic_weights_names_still_work(reference):
     w = dict(arson=0.5, fuel=0.2, dryness=0.2, terrain=0.1)
     a = build_priority_surface(source="synthetic", weights=w)
-    assert _digest(a["hazard"]) != FINGERPRINTS[(20, 20, 42)]["hazard"]
+    assert not _same(a["hazard"], reference["20_20_42_hazard"])
 
 
 def test_real_shapes_ranges_and_keys():
