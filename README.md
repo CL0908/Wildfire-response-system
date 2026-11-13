@@ -25,6 +25,10 @@ The real terrain is a 20 km × 20 km region (40 × 40 cells) at the park's north
 
 Fire detections are uneven from year to year (2020 alone is 41% of the region's total), and about half fall just outside the park boundary. `python data/fetch_khao_yai.py` regenerates the extract (needs `requirements-data.txt`; downloads about 180 MB to a cache outside the repo).
 
+### Does the hazard layer predict later fires?
+
+`data/HAZARD_VALIDATION.md` reports a test on a wider 100 km × 100 km area (`data/hazard_training_500m.npz`, about 33,000 detections): every method saw detections from 2012 to 2019 and was scored on 2020 to 2024. The 20% of cells ranked highest captured 60% of later detections with the hand formula above, 62% with smoothed past fire counts alone, and 61% with a logistic model that also uses distance to roads, settlements and the park boundary; inside the park the figures are 74%, 84% and 74%, a gap that is within the bootstrap interval on this measure. A fitted model did not beat past fire counts, which carry nearly all the signal. The pipeline still uses the hand formula; `hazard_model.py` holds the fitted model for reference and is not used by `main.py`.
+
 ## Results
 
 Covered priority as a fraction of the ILP optimum, on real terrain: mean ± standard deviation over 20 instances per size. Each instance is a 10 km window of the region with its own candidate sites. The 20 windows overlap (by half on average) and the same 20 are used at every size, so the instances are not independent and the spread understates the uncertainty; between sizes only the candidate sites and the number of sensors change. Greedy and simulated annealing return one placement. The QAOA columns are the expected value of a single measurement shot with no classical repair, where a shot with the wrong number of sensors scores 0; "Random" is the same expected value for an N-sensor placement drawn uniformly at random.

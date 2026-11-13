@@ -43,3 +43,14 @@ Attribution: © OpenStreetMap contributors
 ## Fire history for date replay: NASA FIRMS
 
 Same VIIRS S-NPP 375 m yearly Thailand CSVs as above, 2012 to 2025, filtered to the dashboard's map window with the same row filter (confidence `n` or `h`, type == 0). Stored: `dashboards/public/fires.json`, one row per detection (date, lon, lat, FRP, grid row and column, night flag). Source, licence and attribution as in the fire detections entry above.
+
+## Hazard-training grid: `hazard_training_500m.npz`
+
+`data/fetch_hazard_training.py` builds a 200 x 200 grid of 500 m cells (about 100 km x 100 km) centred on, and on the same lattice as, the Khao Yai extract above (the extract is the block at rows 80 to 119, columns 80 to 119). It reuses the same elevation (Copernicus DEM GLO-30, here four tiles N13/N14 x E100/E101), land-cover (ESA WorldCover 2021), park-boundary and FIRMS (2012 to 2025, same filters) sources with the same licences and attribution as the entries above; the FIRMS counts are stored per year. Details, download dates and check results are in `hazard_training_meta.json`.
+
+## Roads and settlements: OpenStreetMap via Overpass
+
+Highways of class motorway, trunk, primary, secondary, tertiary, unclassified, residential and track (way geometry) and place nodes of type city, town, village and hamlet, in a bounding box 10 km larger than the grid on every side. Stored: distance from each cell centre to the nearest road (`dist_road_m`), nearest motorway-to-tertiary road (`dist_major_road_m`) and nearest settlement (`dist_settlement_m`); no OSM geometry is stored. One Overpass request per feature class; raw responses are cached outside the repository.
+Source: Overpass API, https://overpass-api.de/api/interpreter (fallback mirrors in the script: overpass.kumi.systems, overpass.private.coffee); the endpoint that served each class is recorded in `hazard_training_meta.json`.
+Licence: ODbL 1.0, https://www.openstreetmap.org/copyright
+Attribution: © OpenStreetMap contributors

@@ -1,2 +1,3 @@
 # Only needed to regenerate data/ with data/fetch_khao_yai.py (in addition to requirements.txt)
 rasterio>=1.3
+scikit-learn>=1.3   # only for data/fit_hazard_model.py (BSD licence); not needed at runtime or in CI

@@ -1,0 +1,474 @@
+{
+ "description": "500 m cell grid, 200 x 200 cells (about 100 km x 100 km), centred on and lattice-aligned with the 40 x 40 Khao Yai extract, for fitting a wildfire hazard model. Only derived aggregates are stored.",
+ "build_date": "13 November 2026",
+ "grid_shape": [
+  200,
+  200
+ ],
+ "orientation": "row 0 is the north edge, column 0 is the west edge; lat/lon are cell centres (2-D arrays)",
+ "cell_size_m": 500.0,
+ "cell_size_deg": {
+  "lat": 0.004521858664785573,
+  "lon": 0.0046357089801851645,
+  "metres_per_deg_lat": 110574.0,
+  "metres_per_deg_lon": 107858.36689429724,
+  "note": "same lattice as khao_yai_meta.json"
+ },
+ "bounds_deg": {
+  "north": 14.84138966122235,
+  "south": 13.937017928265234,
+  "west": 100.73730044566445,
+  "east": 101.66444224170148
+ },
+ "existing_region_offset_row_col": [
+  80,
+  80
+ ],
+ "existing_region_shape": [
+  40,
+  40
+ ],
+ "arrays": {
+  "lat, lon": "cell-centre coordinates, float64, shape (200, 200)",
+  "dem_m": "mean Copernicus DEM GLO-30 elevation (m) of pixels whose centre is in the cell",
+  "lc_tree ... lc_wetland, lc_other": "share of WorldCover 10 m pixels per class (full resolution)",
+  "inside_park": "share of a 5 x 5 point grid per cell inside the park polygon (even-odd)",
+  "dist_park_edge_m": "metres from cell centre to nearest point of any park boundary ring; positive on both sides, inside_park says which",
+  "fire_by_year": "int16 (14, 200, 200) FIRMS VIIRS S-NPP detections per cell and year, confidence n/h, type 0",
+  "years": "2012 to 2025",
+  "dist_road_m": "metres to nearest OSM way tagged highway = motorway, trunk, primary, secondary, tertiary, unclassified, residential or track (link ramps excluded)",
+  "dist_major_road_m": "same, motorway to tertiary only",
+  "dist_settlement_m": "metres to nearest OSM node tagged place = city, town, village or hamlet"
+ },
+ "distance_method": "local equirectangular metres (same metres per degree as the cell lattice); segments sampled every <= 50 m into a KD-tree, then the exact point-to-segment distance over the 8 nearest samples' segments; error well under 1 m against brute force on a sample of cells. Scale error of the single-latitude projection is about 0.2 percent at the north and south edges.",
+ "osm_bbox_deg_south_west_north_east": [
+  13.846580754969523,
+  100.64458626606074,
+  14.931826834518061,
+  101.75715642130518
+ ],
+ "osm_margin_m": 10000.0,
+ "osm_note": "Distances to features further than the 10 km margin beyond the grid are not seen; this only affects the outer rim.",
+ "osm": {
+  "roads_major": {
+   "mirror": "https://overpass-api.de/api/interpreter",
+   "query": "[out:json][timeout:300];way[\"highway\"~\"^(motorway|trunk|primary|secondary|tertiary)$\"](13.846581,100.644586,14.931827,101.757156);out geom qt;",
+   "downloaded": "13 November 2026",
+   "osm_base_timestamp": "2026-11-13T04:14:05Z",
+   "bytes": 8695930,
+   "elements": 5223,
+   "ways_used": 5223
+  },
+  "roads_minor": {
+   "mirror": "https://overpass-api.de/api/interpreter",
+   "query": "[out:json][timeout:300];way[\"highway\"~\"^(unclassified|residential)$\"](13.846581,100.644586,14.931827,101.757156);out geom qt;",
+   "downloaded": "13 November 2026",
+   "osm_base_timestamp": "2026-11-13T04:14:05Z",
+   "bytes": 73575285,
+   "elements": 85398,
+   "ways_used": 85398
+  },
+  "roads_track": {
+   "mirror": "https://overpass-api.de/api/interpreter",
+   "query": "[out:json][timeout:300];way[\"highway\"=\"track\"](13.846581,100.644586,14.931827,101.757156);out geom qt;",
+   "downloaded": "13 November 2026",
+   "osm_base_timestamp": "2026-11-13T04:15:13Z",
+   "bytes": 7991761,
+   "elements": 6427,
+   "ways_used": 6427
+  },
+  "places": {
+   "mirror": "https://overpass-api.de/api/interpreter",
+   "query": "[out:json][timeout:300];node[\"place\"~\"^(city|town|village|hamlet)$\"](13.846581,100.644586,14.931827,101.757156);out qt;",
+   "downloaded": "13 November 2026",
+   "osm_base_timestamp": "2026-11-13T04:17:21Z",
+   "bytes": 194138,
+   "elements": 661,
+   "nodes_used": 661,
+   "by_type": {
+    "town": 50,
+    "village": 575,
+    "hamlet": 36
+   }
+  },
+  "roads_all_segments": 895486
+ },
+ "osm_failed_classes": [],
+ "sources": {
+  "elevation": {
+   "name": "Copernicus DEM GLO-30 (DSM, COG, 1 arc-second)",
+   "tiles": [
+    "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/Copernicus_DSM_COG_10_N13_00_E100_00_DEM/Copernicus_DSM_COG_10_N13_00_E100_00_DEM.tif",
+    "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/Copernicus_DSM_COG_10_N13_00_E101_00_DEM/Copernicus_DSM_COG_10_N13_00_E101_00_DEM.tif",
+    "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/Copernicus_DSM_COG_10_N14_00_E100_00_DEM/Copernicus_DSM_COG_10_N14_00_E100_00_DEM.tif",
+    "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/Copernicus_DSM_COG_10_N14_00_E101_00_DEM/Copernicus_DSM_COG_10_N14_00_E101_00_DEM.tif"
+   ],
+   "licence": "Copernicus DEM licence (free of charge, incl. commercial use, with attribution)",
+   "attribution": "produced using Copernicus WorldDEM-30 \u00a9 DLR e.V. 2010-2014 and \u00a9 Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved",
+   "download_date": "13 November 2026",
+   "resolution": "full 1 arc-second (about 30 m)"
+  },
+  "landcover": {
+   "name": "ESA WorldCover 10 m 2021 v200",
+   "url": "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N12E099_Map.tif",
+   "licence": "CC BY 4.0",
+   "attribution": "\u00a9 ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium",
+   "download_date": "13 November 2026",
+   "resolution": "full 10 m"
+  },
+  "fire": {
+   "name": "NASA FIRMS VIIRS S-NPP 375 m, yearly Thailand CSVs, 2012 to 2025",
+   "url": "https://firms.modaps.eosdis.nasa.gov/data/country/viirs-snpp/{y}/viirs-snpp_{y}_Thailand.csv",
+   "licence": "NASA open data policy; free to use with acknowledgement",
+   "filter": "confidence in {n, h} and type == 0 (same load_fires as fetch_khao_yai.py)",
+   "per_year_file_stats_in_grid_extent": {
+    "2012": {
+     "rows_in_file": 165440,
+     "rows_in_grid_extent": 2864,
+     "rows_confidence_n_or_h": 2646,
+     "rows_kept": 1738,
+     "type_filter_applied": true
+    },
+    "2013": {
+     "rows_in_file": 197060,
+     "rows_in_grid_extent": 4023,
+     "rows_confidence_n_or_h": 3603,
+     "rows_kept": 2568,
+     "type_filter_applied": true
+    },
+    "2014": {
+     "rows_in_file": 199652,
+     "rows_in_grid_extent": 4409,
+     "rows_confidence_n_or_h": 4044,
+     "rows_kept": 2887,
+     "type_filter_applied": true
+    },
+    "2015": {
+     "rows_in_file": 190585,
+     "rows_in_grid_extent": 4386,
+     "rows_confidence_n_or_h": 3983,
+     "rows_kept": 2701,
+     "type_filter_applied": true
+    },
+    "2016": {
+     "rows_in_file": 237372,
+     "rows_in_grid_extent": 4771,
+     "rows_confidence_n_or_h": 4224,
+     "rows_kept": 3098,
+     "type_filter_applied": true
+    },
+    "2017": {
+     "rows_in_file": 132768,
+     "rows_in_grid_extent": 3948,
+     "rows_confidence_n_or_h": 3649,
+     "rows_kept": 2596,
+     "type_filter_applied": true
+    },
+    "2018": {
+     "rows_in_file": 117081,
+     "rows_in_grid_extent": 2985,
+     "rows_confidence_n_or_h": 2820,
+     "rows_kept": 1711,
+     "type_filter_applied": true
+    },
+    "2019": {
+     "rows_in_file": 235482,
+     "rows_in_grid_extent": 4486,
+     "rows_confidence_n_or_h": 4158,
+     "rows_kept": 2813,
+     "type_filter_applied": true
+    },
+    "2020": {
+     "rows_in_file": 221248,
+     "rows_in_grid_extent": 5249,
+     "rows_confidence_n_or_h": 4833,
+     "rows_kept": 3622,
+     "type_filter_applied": true
+    },
+    "2021": {
+     "rows_in_file": 113225,
+     "rows_in_grid_extent": 3132,
+     "rows_confidence_n_or_h": 2919,
+     "rows_kept": 1902,
+     "type_filter_applied": true
+    },
+    "2022": {
+     "rows_in_file": 54784,
+     "rows_in_grid_extent": 2416,
+     "rows_confidence_n_or_h": 2281,
+     "rows_kept": 1423,
+     "type_filter_applied": true
+    },
+    "2023": {
+     "rows_in_file": 180567,
+     "rows_in_grid_extent": 3524,
+     "rows_confidence_n_or_h": 3185,
+     "rows_kept": 2292,
+     "type_filter_applied": true
+    },
+    "2024": {
+     "rows_in_file": 143538,
+     "rows_in_grid_extent": 3226,
+     "rows_confidence_n_or_h": 2984,
+     "rows_kept": 2121,
+     "type_filter_applied": true
+    },
+    "2025": {
+     "rows_in_file": 103794,
+     "rows_in_grid_extent": 2428,
+     "rows_confidence_n_or_h": 2298,
+     "rows_kept": 1503,
+     "type_filter_applied": true
+    }
+   },
+   "files_downloaded": "12 November 2026 (cached in data_cache/firms)"
+  },
+  "park_boundary": {
+   "name": "OpenStreetMap relation 2971358",
+   "url": "https://polygons.openstreetmap.fr/get_geojson.py?id=2971358&params=0",
+   "licence": "ODbL 1.0",
+   "attribution": "\u00a9 OpenStreetMap contributors",
+   "download_date": "12 November 2026 (cached in data_cache)"
+  },
+  "osm_roads_places": {
+   "name": "OpenStreetMap highways and place nodes via the Overpass API",
+   "endpoints_tried": [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter"
+   ],
+   "licence": "ODbL 1.0",
+   "attribution": "\u00a9 OpenStreetMap contributors",
+   "licence_url": "https://www.openstreetmap.org/copyright"
+  }
+ },
+ "array_stats": {
+  "lat": {
+   "min": 13.939279,
+   "mean": 14.389204,
+   "max": 14.839129
+  },
+  "lon": {
+   "min": 100.739618,
+   "mean": 101.200871,
+   "max": 101.662124
+  },
+  "dem_m": {
+   "min": -15.461401,
+   "mean": 201.030667,
+   "max": 1306.927246
+  },
+  "lc_tree": {
+   "min": 0.0,
+   "mean": 0.505421,
+   "max": 1.0
+  },
+  "lc_shrub": {
+   "min": 0.0,
+   "mean": 0.000156,
+   "max": 0.212662
+  },
+  "lc_grass": {
+   "min": 0.0,
+   "mean": 0.092032,
+   "max": 0.997403
+  },
+  "lc_crop": {
+   "min": 0.0,
+   "mean": 0.325295,
+   "max": 1.0
+  },
+  "lc_built": {
+   "min": 0.0,
+   "mean": 0.041181,
+   "max": 0.977441
+  },
+  "lc_bare": {
+   "min": 0.0,
+   "mean": 0.006873,
+   "max": 0.995779
+  },
+  "lc_water": {
+   "min": 0.0,
+   "mean": 0.025688,
+   "max": 1.0
+  },
+  "lc_wetland": {
+   "min": 0.0,
+   "mean": 0.003353,
+   "max": 0.554882
+  },
+  "lc_other": {
+   "min": 0.0,
+   "mean": 0.0,
+   "max": 0.0
+  },
+  "inside_park": {
+   "min": 0.0,
+   "mean": 0.171427,
+   "max": 1.0
+  },
+  "dist_park_edge_m": {
+   "min": 0.273014,
+   "mean": 20063.415944,
+   "max": 63786.761719
+  },
+  "fire_by_year": {
+   "min": 0.0,
+   "mean": 0.058884,
+   "max": 55.0
+  },
+  "dist_major_road_m": {
+   "min": 0.024938,
+   "mean": 1941.422204,
+   "max": 15643.183594
+  },
+  "dist_road_m": {
+   "min": 0.010688,
+   "mean": 934.667579,
+   "max": 15134.029297
+  },
+  "dist_settlement_m": {
+   "min": 4.354784,
+   "mean": 5011.418287,
+   "max": 21940.333984
+  }
+ },
+ "checks": {
+  "sub_block_offset_row_col": [
+   80,
+   80
+  ],
+  "sub_block_lat_max_abs_diff_deg": 1.7763568394002505e-15,
+  "sub_block_lon_max_abs_diff_deg": 0.0,
+  "sub_block_value_agreement": {
+   "dem_m": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "lc_tree": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "lc_shrub": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "lc_grass": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "lc_crop": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "lc_built": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "lc_bare": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "lc_water": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "lc_wetland": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "lc_other": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   },
+   "inside_park": {
+    "max_abs_diff": 0.0,
+    "mean_abs_diff": 0.0
+   }
+  },
+  "fire_sub_block_sum_equals_existing_fire_count": true,
+  "fire_years_sub_block_equals_existing_fire_years": true,
+  "fire_sub_block_per_year": {
+   "2012": 30,
+   "2013": 29,
+   "2014": 82,
+   "2015": 24,
+   "2016": 223,
+   "2017": 13,
+   "2018": 4,
+   "2019": 26,
+   "2020": 416,
+   "2021": 5,
+   "2022": 3,
+   "2023": 152,
+   "2024": 7,
+   "2025": 3
+  },
+  "fire_sub_block_per_year_expected": {
+   "2012": 30,
+   "2013": 29,
+   "2014": 82,
+   "2015": 24,
+   "2016": 223,
+   "2017": 13,
+   "2018": 4,
+   "2019": 26,
+   "2020": 416,
+   "2021": 5,
+   "2022": 3,
+   "2023": 152,
+   "2024": 7,
+   "2025": 3
+  },
+  "fire_sub_block_per_year_matches": true,
+  "fire_total_grid_per_year": {
+   "2012": 1738,
+   "2013": 2568,
+   "2014": 2887,
+   "2015": 2701,
+   "2016": 3098,
+   "2017": 2596,
+   "2018": 1711,
+   "2019": 2813,
+   "2020": 3622,
+   "2021": 1902,
+   "2022": 1423,
+   "2023": 2292,
+   "2024": 2121,
+   "2025": 1503
+  },
+  "fire_total_inside_park_cells_per_year": {
+   "2012": 25,
+   "2013": 35,
+   "2014": 71,
+   "2015": 27,
+   "2016": 225,
+   "2017": 11,
+   "2018": 5,
+   "2019": 72,
+   "2020": 441,
+   "2021": 20,
+   "2022": 13,
+   "2023": 117,
+   "2024": 29,
+   "2025": 11
+  },
+  "fire_max_per_cell_year": 55,
+  "lc_fraction_sum_min_max": [
+   0.9999999513383955,
+   1.0000000486616045
+  ],
+  "dem_min_pixels_per_cell": 256,
+  "lc_pixels_per_cell_min_max": [
+   2970,
+   3080
+  ],
+  "cells_inside_park_gt_0.5": 6861,
+  "dist_park_edge_m_finite_nonneg": true,
+  "dist_major_road_m_finite_nonneg": true,
+  "dist_road_m_finite_nonneg": true,
+  "dist_settlement_m_finite_nonneg": true
+ },
+ "runtime_seconds": 21.0
+}
