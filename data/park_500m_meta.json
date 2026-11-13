@@ -1,0 +1,389 @@
+{
+ "description": "500 m cell grid covering the whole of Khao Yai National Park plus a margin of 10 cells (5 km) on every side, on the same lattice as hazard_training_500m.npz (200 x 200) and khao_yai_500m.npz (40 x 40). Only derived aggregates are stored. No road or settlement distances.",
+ "build_date": "13 November 2026",
+ "grid_shape": [
+  131,
+  187
+ ],
+ "orientation": "row 0 is the north edge, column 0 is the west edge; lat/lon are cell centres (2-D arrays)",
+ "cell_size_m": 500.0,
+ "cell_size_deg": {
+  "lat": 0.004521858664785573,
+  "lon": 0.0046357089801851645,
+  "metres_per_deg_lat": 110574.0,
+  "metres_per_deg_lon": 107858.36689429724,
+  "note": "same lattice as khao_yai_meta.json and hazard_training_meta.json"
+ },
+ "bounds_deg": {
+  "north": 14.624340445312642,
+  "south": 14.031976960225732,
+  "west": 101.07570720121797,
+  "east": 101.94258478051259
+ },
+ "offset_in_hazard_training_grid_row_col": [
+  48,
+  73
+ ],
+ "offset_note": "cell (r, c) here is cell (r + row0, c + col0) of the 200 x 200 grid; columns >= 200 - col0 lie beyond that grid's east edge",
+ "overlap_with_hazard_training_grid": {
+  "rows_here": [
+   0,
+   131
+  ],
+  "cols_here": [
+   0,
+   127
+  ],
+  "shape": [
+   131,
+   127
+  ]
+ },
+ "khao_yai_block_offset_row_col": [
+  32,
+  7
+ ],
+ "khao_yai_block_shape": [
+  40,
+  40
+ ],
+ "extent_rule": "bounding box of the OSM park polygon, rounded outward to whole cells of the 200-grid lattice, plus 10 cells on every side",
+ "park_polygon_bbox_deg": {
+  "west": 101.1266613,
+  "east": 101.8960229,
+  "south": 14.0773073,
+  "north": 14.5746428
+ },
+ "park_polygon_area_km2": {
+  "lattice": 2218.02,
+  "local": 2217.95
+ },
+ "park_polygon_area_note": "'lattice': planar shoelace with the metres per degree of the cell lattice (what a 0.25 km2 cell assumes); 'local': longitude scaled by cos(latitude) at each vertex. Outer ring minus holes.",
+ "arrays": {
+  "lat, lon": "cell-centre coordinates, float64, shape (131, 187)",
+  "dem_m": "mean Copernicus DEM GLO-30 elevation (m) of pixels whose centre is in the cell, float32",
+  "dem_max_m": "maximum of the same pixels, float32",
+  "lc_tree ... lc_wetland, lc_other": "share of WorldCover 10 m pixels per class (full resolution), float32",
+  "inside_park": "share of a 5 x 5 point grid per cell inside the park polygon (even-odd), float32",
+  "dist_park_edge_m": "metres from cell centre to nearest point of any park boundary ring; positive on both sides, inside_park says which; float32",
+  "fire_by_year": "int16 (14, 131, 187) FIRMS VIIRS S-NPP detections per cell and year, confidence n/h, type 0",
+  "years": "int16, 2012 to 2025",
+  "fire_count": "int32, sum of fire_by_year over years (same definition as khao_yai_500m.npz)",
+  "fire_years": "int16, number of years with at least one detection (same as khao_yai_500m.npz)"
+ },
+ "not_included": "dist_road_m, dist_major_road_m, dist_settlement_m. They are only used for refitting the hazard model, the cached OpenStreetMap extract stops short of the park's east edge, and re-fetching it was out of scope.",
+ "sources": {
+  "elevation": {
+   "name": "Copernicus DEM GLO-30 (DSM, COG, 1 arc-second)",
+   "tiles": [
+    {
+     "url": "https://copernicus-dem-30m.s3.eu-central-1.amazonaws.com/Copernicus_DSM_COG_10_N14_00_E101_00_DEM/Copernicus_DSM_COG_10_N14_00_E101_00_DEM.tif",
+     "bounds_deg": {
+      "west": 100.99986111111112,
+      "south": 14.00013888888889,
+      "east": 101.99986111111112,
+      "north": 15.00013888888889
+     },
+     "pixels_read": 6660214,
+     "pixels_in_grid": 6653972
+    }
+   ],
+   "licence": "Copernicus DEM licence (free of charge, incl. commercial use, with attribution)",
+   "attribution": "produced using Copernicus WorldDEM-30 \u00a9 DLR e.V. 2010-2014 and \u00a9 Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved",
+   "download_date": "13 November 2026",
+   "resolution": "full 1 arc-second (about 30 m)"
+  },
+  "landcover": {
+   "name": "ESA WorldCover 10 m 2021 v200",
+   "tiles": [
+    {
+     "url": "https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/ESA_WorldCover_10m_2021_v200_N12E099_Map.tif",
+     "bounds_deg": {
+      "west": 99.0,
+      "south": 12.0,
+      "east": 102.0,
+      "north": 15.0
+     },
+     "pixels_read": 73972440,
+     "pixels_in_grid": 73944524
+    }
+   ],
+   "licence": "CC BY 4.0",
+   "attribution": "\u00a9 ESA WorldCover project 2021 / Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover consortium",
+   "download_date": "13 November 2026",
+   "resolution": "full 10 m"
+  },
+  "fire": {
+   "name": "NASA FIRMS VIIRS S-NPP 375 m, yearly Thailand CSVs, 2012 to 2025",
+   "url": "https://firms.modaps.eosdis.nasa.gov/data/country/viirs-snpp/{y}/viirs-snpp_{y}_Thailand.csv",
+   "licence": "NASA open data policy; free to use with acknowledgement",
+   "filter": "confidence in {n, h} and type == 0 (same fk.load_fires as the other extracts)",
+   "per_year_file_stats_in_grid_extent": {
+    "2012": {
+     "rows_in_file": 165440,
+     "rows_in_grid_extent": 934,
+     "rows_confidence_n_or_h": 846,
+     "rows_kept": 846,
+     "type_filter_applied": true
+    },
+    "2013": {
+     "rows_in_file": 197060,
+     "rows_in_grid_extent": 1273,
+     "rows_confidence_n_or_h": 1133,
+     "rows_kept": 1133,
+     "type_filter_applied": true
+    },
+    "2014": {
+     "rows_in_file": 199652,
+     "rows_in_grid_extent": 1561,
+     "rows_confidence_n_or_h": 1415,
+     "rows_kept": 1415,
+     "type_filter_applied": true
+    },
+    "2015": {
+     "rows_in_file": 190585,
+     "rows_in_grid_extent": 1366,
+     "rows_confidence_n_or_h": 1209,
+     "rows_kept": 1208,
+     "type_filter_applied": true
+    },
+    "2016": {
+     "rows_in_file": 237372,
+     "rows_in_grid_extent": 2105,
+     "rows_confidence_n_or_h": 1853,
+     "rows_kept": 1850,
+     "type_filter_applied": true
+    },
+    "2017": {
+     "rows_in_file": 132768,
+     "rows_in_grid_extent": 1118,
+     "rows_confidence_n_or_h": 1024,
+     "rows_kept": 1020,
+     "type_filter_applied": true
+    },
+    "2018": {
+     "rows_in_file": 117081,
+     "rows_in_grid_extent": 892,
+     "rows_confidence_n_or_h": 824,
+     "rows_kept": 822,
+     "type_filter_applied": true
+    },
+    "2019": {
+     "rows_in_file": 235482,
+     "rows_in_grid_extent": 1416,
+     "rows_confidence_n_or_h": 1290,
+     "rows_kept": 1286,
+     "type_filter_applied": true
+    },
+    "2020": {
+     "rows_in_file": 221248,
+     "rows_in_grid_extent": 2401,
+     "rows_confidence_n_or_h": 2220,
+     "rows_kept": 2219,
+     "type_filter_applied": true
+    },
+    "2021": {
+     "rows_in_file": 113225,
+     "rows_in_grid_extent": 960,
+     "rows_confidence_n_or_h": 884,
+     "rows_kept": 884,
+     "type_filter_applied": true
+    },
+    "2022": {
+     "rows_in_file": 54784,
+     "rows_in_grid_extent": 646,
+     "rows_confidence_n_or_h": 601,
+     "rows_kept": 601,
+     "type_filter_applied": true
+    },
+    "2023": {
+     "rows_in_file": 180567,
+     "rows_in_grid_extent": 1336,
+     "rows_confidence_n_or_h": 1219,
+     "rows_kept": 1219,
+     "type_filter_applied": true
+    },
+    "2024": {
+     "rows_in_file": 143538,
+     "rows_in_grid_extent": 1112,
+     "rows_confidence_n_or_h": 1002,
+     "rows_kept": 1001,
+     "type_filter_applied": true
+    },
+    "2025": {
+     "rows_in_file": 103794,
+     "rows_in_grid_extent": 923,
+     "rows_confidence_n_or_h": 861,
+     "rows_kept": 861,
+     "type_filter_applied": true
+    }
+   },
+   "files": "cached in data_cache/firms"
+  },
+  "park_boundary": {
+   "name": "OpenStreetMap relation 2971358",
+   "url": "https://polygons.openstreetmap.fr/get_geojson.py?id=2971358&params=0",
+   "licence": "ODbL 1.0",
+   "attribution": "\u00a9 OpenStreetMap contributors"
+  }
+ },
+ "array_stats": {
+  "lat": {
+   "min": 14.034238,
+   "mean": 14.328159,
+   "max": 14.62208
+  },
+  "lon": {
+   "min": 101.078025,
+   "mean": 101.509146,
+   "max": 101.940267
+  },
+  "dem_m": {
+   "min": 2.634852,
+   "mean": 327.950001,
+   "max": 1306.927246
+  },
+  "dem_max_m": {
+   "min": 3.386492,
+   "mean": 363.598452,
+   "max": 1353.195435
+  },
+  "lc_tree": {
+   "min": 0.0,
+   "mean": 0.705583,
+   "max": 1.0
+  },
+  "lc_shrub": {
+   "min": 0.0,
+   "mean": 7.1e-05,
+   "max": 0.078704
+  },
+  "lc_grass": {
+   "min": 0.0,
+   "mean": 0.074995,
+   "max": 0.974026
+  },
+  "lc_crop": {
+   "min": 0.0,
+   "mean": 0.187251,
+   "max": 1.0
+  },
+  "lc_built": {
+   "min": 0.0,
+   "mean": 0.01607,
+   "max": 0.942791
+  },
+  "lc_bare": {
+   "min": 0.0,
+   "mean": 0.002699,
+   "max": 0.750992
+  },
+  "lc_water": {
+   "min": 0.0,
+   "mean": 0.012378,
+   "max": 1.0
+  },
+  "lc_wetland": {
+   "min": 0.0,
+   "mean": 0.000954,
+   "max": 0.401786
+  },
+  "lc_other": {
+   "min": 0.0,
+   "mean": 0.0,
+   "max": 0.0
+  },
+  "inside_park": {
+   "min": 0.0,
+   "mean": 0.362167,
+   "max": 1.0
+  },
+  "dist_park_edge_m": {
+   "min": 0.273014,
+   "mean": 7483.628934,
+   "max": 31735.628906
+  },
+  "fire_by_year": {
+   "min": 0.0,
+   "mean": 0.047717,
+   "max": 7.0
+  },
+  "fire_count": {
+   "min": 0.0,
+   "mean": 0.668041,
+   "max": 24.0
+  },
+  "fire_years": {
+   "min": 0.0,
+   "mean": 0.538923,
+   "max": 12.0
+  }
+ },
+ "checks": {
+  "cells_inside_park_gt_0.5": 8874,
+  "area_from_grid_km2": 2218.0,
+  "area_from_grid_cells_gt_0.5_km2": 2218.5,
+  "outer_ring_max_inside_park": 0.0,
+  "lc_fraction_sum_min_max": [
+   0.9999999552965164,
+   1.0000000486616045
+  ],
+  "lc_pixels_per_cell_min_max": [
+   2970,
+   3080
+  ],
+  "dem_min_pixels_per_cell": 256,
+  "fire_total_grid": 16365,
+  "fire_total_inside_park_cells": 1264,
+  "fire_total_inside_park_cells_east_of_200_grid": 162,
+  "fire_total_east_of_200_grid_all_cells": 3279,
+  "fire_per_year_grid": {
+   "2012": 846,
+   "2013": 1133,
+   "2014": 1415,
+   "2015": 1208,
+   "2016": 1850,
+   "2017": 1020,
+   "2018": 822,
+   "2019": 1286,
+   "2020": 2219,
+   "2021": 884,
+   "2022": 601,
+   "2023": 1219,
+   "2024": 1001,
+   "2025": 861
+  },
+  "fire_per_year_inside_park_cells": {
+   "2012": 30,
+   "2013": 54,
+   "2014": 75,
+   "2015": 29,
+   "2016": 304,
+   "2017": 12,
+   "2018": 6,
+   "2019": 81,
+   "2020": 467,
+   "2021": 20,
+   "2022": 17,
+   "2023": 127,
+   "2024": 29,
+   "2025": 13
+  },
+  "lc_shares_mean_over_inside_park_cells": {
+   "lc_tree": 0.9816,
+   "lc_shrub": 0.0,
+   "lc_grass": 0.011,
+   "lc_crop": 0.0057,
+   "lc_built": 0.0006,
+   "lc_bare": 0.0001,
+   "lc_water": 0.001,
+   "lc_wetland": 0.0,
+   "lc_other": 0.0
+  },
+  "dem_range_m_inside_park_cells": [
+   13.226517677307129,
+   1353.1954345703125
+  ]
+ },
+ "runtime_seconds": 11.4
+}

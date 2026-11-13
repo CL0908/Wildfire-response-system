@@ -72,6 +72,26 @@ The time-to-detection optimum was the same four sites as the fire-history covera
 
 `detection/RESULTS.md` has the full tables, percentiles, bootstrap intervals and the sensitivity grid. Regenerate with `python -m detection.run` (a few seconds; the output is the same on every run).
 
+## Whole-park placement (modelled and simulated)
+
+`park/` runs the placement problem on the whole of Khao Yai National Park instead of a 10 km window: every cell inside the park (8,874 cells of 500 m) is a candidate site, a 30 m mast sees up to 4 km by line of sight over the elevation grid, and the objective is the same hazard x value coverage as above. The priority surface and the visibility are modelled, and the time-to-detection comparison in `park/RESULTS.md` is simulated with the same uncalibrated spread model as above. Ignitions are drawn only inside the park; about 12 times more satellite detections lie in the margin around it, and fires spreading in from there are not simulated.
+
+Greedy placements of 10, 20 and 40 sensors. The two coverage columns are shares of the in-park total. The last column compares greedy with the upper bound on the objective itself, which is summed over the whole grid including the margin; the bound is the LP relaxation of the coverage integer programme. The integer programme also finished and proved the optimum at each size, and greedy is within 0.1, 0.3 and 1.4 percent of it.
+
+| Sensors | Priority covered (in the park) | Area covered (in the park) | Greedy as a share of the upper bound |
+|---|---|---|---|
+| 10 | 21.9% | 16.4% | 99.9% |
+| 20 | 38.1% | 30.7% | 99.6% |
+| 40 | 61.5% | 57.3% | 98.3% |
+
+Going from 20 to 40 sensors adds 23 percentage points of priority. Placing 20 sensors by where fires have started instead covers 88% of the 2012 to 2025 in-park detections but 27% of the priority, and shares 5 of its 20 sites with the priority placement (figure below). Choosing sites by simulated time to detection gives a different set from fire-history coverage here (3 to 9 of 20 sites shared across 9 spread-rate and satellite-delay settings), unlike on the 20 x 20 window, and it does not detect sooner: fire-history coverage is earlier in 6 of the 9 settings, the timed placement in 1, and 2 are inside the bootstrap interval (differences of -0.19 to +0.22 hours). The likely cause is that choosing among 8,874 candidates on one sample of 2,000 scenarios overfits that sample; this run does not test that. The 88% is in-sample, since the fire-history placement is fitted to those same detections. The priority placement also weighs what is worth protecting, so no winner is declared between the objectives.
+
+Every in-park cell is treated as a possible site, with no account of road access, land tenure, power or maintenance, so this is not a siting plan. Visibility has no tree-canopy height, smoke or weather, and about 6% of viewshed cells differ from the 20 x 20 window's for the same sites because the line-of-sight rule rounds by a site's row and column parity. Detection is assumed instant when fire enters a visible cell, which favours sensors. The spread rate comes from deciduous-forest burns elsewhere in Thailand, the land-cover data shows the park as 98% tree cover without separating evergreen from deciduous, and the fire-history and time-to-detection placements are chosen and scored on the same fire-history distribution.
+
+![Twenty sensor sites chosen by priority coverage and by fire history, with the cells each set sees, on the park grid](park/placements.png)
+
+`park/RESULTS.md` has the full tables, the coverage curve to 60 sensors and the limitations. Regenerate with `python -m park.run` (about 9 minutes, mostly the integer programmes). The output is the same on every run, except that on a busy machine the 40-sensor integer programme can hit its 300 second limit, and the results then report the upper bound only and say the optimum was not proved.
+
 ## Ranger response
 
 `ranger_response/` plans where a ranger crew should cut firebreaks, and in what order, once a fire is detected. It runs on the synthetic terrain. It is a classical planner modelled on the Moving Firefighter Problem: fire spreads cell to cell through fuel, the crew takes time to travel, and a firebreak only holds if it is finished before the fire arrives. On the default case one crew's six firebreaks cut the burned area from 230 cells to 42. See `ranger_response/README.md` for the model and its simplifications.

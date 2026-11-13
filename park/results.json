@@ -1,0 +1,1660 @@
+{
+  "modelled_and_simulated": true,
+  "note": "MODELLED priority surface and line-of-sight visibility; SIMULATED fires and detection times from a simplified, uncalibrated spread model. Not a prediction of real fires or real detection times, and not a siting plan.",
+  "instance": {
+    "grid_shape": [
+      131,
+      187
+    ],
+    "cell_m": 500.0,
+    "n_cells": 24497,
+    "n_candidate_sites": 8874,
+    "n_in_park_cells": 8874,
+    "n_sites_with_positive_ignition_weight": 4945,
+    "total_priority_weight_in_park": 2973.8,
+    "total_priority_weight_on_grid": 3793.3,
+    "in_park_fire_detections": 1264,
+    "margin_fire_detections": 15101,
+    "margin_to_park_detection_ratio": 11.9,
+    "visible_site_cell_pairs": 807607,
+    "quick": false
+  },
+  "scenarios": {
+    "n_train": 2000,
+    "n_test": 2000,
+    "train_seed": 101,
+    "test_seed": 202,
+    "headline_r0_m_min": 2.0,
+    "headline_baseline_h": 6.0,
+    "horizon_h": 12.0
+  },
+  "k_values": [
+    10,
+    20,
+    40
+  ],
+  "coverage_curve": [
+    {
+      "k": 1,
+      "objective_share": 0.022,
+      "added_by_last_sensor": 0.0223,
+      "priority_share": 0.028,
+      "area_share": 0.015,
+      "fire_share": 0.159
+    },
+    {
+      "k": 2,
+      "objective_share": 0.043,
+      "added_by_last_sensor": 0.0204,
+      "priority_share": 0.054,
+      "area_share": 0.034,
+      "fire_share": 0.204
+    },
+    {
+      "k": 3,
+      "objective_share": 0.061,
+      "added_by_last_sensor": 0.0185,
+      "priority_share": 0.077,
+      "area_share": 0.051,
+      "fire_share": 0.225
+    },
+    {
+      "k": 4,
+      "objective_share": 0.079,
+      "added_by_last_sensor": 0.0174,
+      "priority_share": 0.099,
+      "area_share": 0.065,
+      "fire_share": 0.328
+    },
+    {
+      "k": 5,
+      "objective_share": 0.096,
+      "added_by_last_sensor": 0.0172,
+      "priority_share": 0.121,
+      "area_share": 0.081,
+      "fire_share": 0.343
+    },
+    {
+      "k": 6,
+      "objective_share": 0.112,
+      "added_by_last_sensor": 0.0167,
+      "priority_share": 0.142,
+      "area_share": 0.094,
+      "fire_share": 0.423
+    },
+    {
+      "k": 7,
+      "objective_share": 0.129,
+      "added_by_last_sensor": 0.0163,
+      "priority_share": 0.162,
+      "area_share": 0.116,
+      "fire_share": 0.426
+    },
+    {
+      "k": 8,
+      "objective_share": 0.145,
+      "added_by_last_sensor": 0.0162,
+      "priority_share": 0.183,
+      "area_share": 0.131,
+      "fire_share": 0.434
+    },
+    {
+      "k": 9,
+      "objective_share": 0.16,
+      "added_by_last_sensor": 0.0152,
+      "priority_share": 0.201,
+      "area_share": 0.146,
+      "fire_share": 0.441
+    },
+    {
+      "k": 10,
+      "objective_share": 0.174,
+      "added_by_last_sensor": 0.0141,
+      "priority_share": 0.219,
+      "area_share": 0.164,
+      "fire_share": 0.449
+    },
+    {
+      "k": 11,
+      "objective_share": 0.188,
+      "added_by_last_sensor": 0.014,
+      "priority_share": 0.236,
+      "area_share": 0.174,
+      "fire_share": 0.532
+    },
+    {
+      "k": 12,
+      "objective_share": 0.202,
+      "added_by_last_sensor": 0.0136,
+      "priority_share": 0.253,
+      "area_share": 0.186,
+      "fire_share": 0.54
+    },
+    {
+      "k": 13,
+      "objective_share": 0.215,
+      "added_by_last_sensor": 0.0134,
+      "priority_share": 0.27,
+      "area_share": 0.203,
+      "fire_share": 0.544
+    },
+    {
+      "k": 14,
+      "objective_share": 0.228,
+      "added_by_last_sensor": 0.0133,
+      "priority_share": 0.287,
+      "area_share": 0.222,
+      "fire_share": 0.547
+    },
+    {
+      "k": 15,
+      "objective_share": 0.241,
+      "added_by_last_sensor": 0.0129,
+      "priority_share": 0.303,
+      "area_share": 0.235,
+      "fire_share": 0.547
+    },
+    {
+      "k": 16,
+      "objective_share": 0.254,
+      "added_by_last_sensor": 0.0129,
+      "priority_share": 0.319,
+      "area_share": 0.251,
+      "fire_share": 0.547
+    },
+    {
+      "k": 17,
+      "objective_share": 0.267,
+      "added_by_last_sensor": 0.0128,
+      "priority_share": 0.335,
+      "area_share": 0.264,
+      "fire_share": 0.547
+    },
+    {
+      "k": 18,
+      "objective_share": 0.28,
+      "added_by_last_sensor": 0.0125,
+      "priority_share": 0.351,
+      "area_share": 0.276,
+      "fire_share": 0.58
+    },
+    {
+      "k": 19,
+      "objective_share": 0.292,
+      "added_by_last_sensor": 0.0125,
+      "priority_share": 0.367,
+      "area_share": 0.295,
+      "fire_share": 0.58
+    },
+    {
+      "k": 20,
+      "objective_share": 0.305,
+      "added_by_last_sensor": 0.0124,
+      "priority_share": 0.381,
+      "area_share": 0.307,
+      "fire_share": 0.592
+    },
+    {
+      "k": 21,
+      "objective_share": 0.317,
+      "added_by_last_sensor": 0.0124,
+      "priority_share": 0.396,
+      "area_share": 0.318,
+      "fire_share": 0.594
+    },
+    {
+      "k": 22,
+      "objective_share": 0.329,
+      "added_by_last_sensor": 0.0117,
+      "priority_share": 0.411,
+      "area_share": 0.337,
+      "fire_share": 0.595
+    },
+    {
+      "k": 23,
+      "objective_share": 0.34,
+      "added_by_last_sensor": 0.0116,
+      "priority_share": 0.426,
+      "area_share": 0.357,
+      "fire_share": 0.624
+    },
+    {
+      "k": 24,
+      "objective_share": 0.351,
+      "added_by_last_sensor": 0.0112,
+      "priority_share": 0.44,
+      "area_share": 0.377,
+      "fire_share": 0.662
+    },
+    {
+      "k": 25,
+      "objective_share": 0.362,
+      "added_by_last_sensor": 0.0109,
+      "priority_share": 0.454,
+      "area_share": 0.39,
+      "fire_share": 0.662
+    },
+    {
+      "k": 26,
+      "objective_share": 0.372,
+      "added_by_last_sensor": 0.0099,
+      "priority_share": 0.466,
+      "area_share": 0.404,
+      "fire_share": 0.682
+    },
+    {
+      "k": 27,
+      "objective_share": 0.382,
+      "added_by_last_sensor": 0.0096,
+      "priority_share": 0.477,
+      "area_share": 0.41,
+      "fire_share": 0.722
+    },
+    {
+      "k": 28,
+      "objective_share": 0.391,
+      "added_by_last_sensor": 0.0095,
+      "priority_share": 0.489,
+      "area_share": 0.427,
+      "fire_share": 0.722
+    },
+    {
+      "k": 29,
+      "objective_share": 0.401,
+      "added_by_last_sensor": 0.0092,
+      "priority_share": 0.5,
+      "area_share": 0.436,
+      "fire_share": 0.722
+    },
+    {
+      "k": 30,
+      "objective_share": 0.41,
+      "added_by_last_sensor": 0.009,
+      "priority_share": 0.51,
+      "area_share": 0.443,
+      "fire_share": 0.775
+    },
+    {
+      "k": 31,
+      "objective_share": 0.418,
+      "added_by_last_sensor": 0.0089,
+      "priority_share": 0.521,
+      "area_share": 0.452,
+      "fire_share": 0.786
+    },
+    {
+      "k": 32,
+      "objective_share": 0.427,
+      "added_by_last_sensor": 0.0088,
+      "priority_share": 0.533,
+      "area_share": 0.463,
+      "fire_share": 0.787
+    },
+    {
+      "k": 33,
+      "objective_share": 0.436,
+      "added_by_last_sensor": 0.0086,
+      "priority_share": 0.543,
+      "area_share": 0.477,
+      "fire_share": 0.787
+    },
+    {
+      "k": 34,
+      "objective_share": 0.444,
+      "added_by_last_sensor": 0.0086,
+      "priority_share": 0.554,
+      "area_share": 0.49,
+      "fire_share": 0.787
+    },
+    {
+      "k": 35,
+      "objective_share": 0.453,
+      "added_by_last_sensor": 0.0084,
+      "priority_share": 0.565,
+      "area_share": 0.506,
+      "fire_share": 0.787
+    },
+    {
+      "k": 36,
+      "objective_share": 0.461,
+      "added_by_last_sensor": 0.0083,
+      "priority_share": 0.576,
+      "area_share": 0.52,
+      "fire_share": 0.787
+    },
+    {
+      "k": 37,
+      "objective_share": 0.47,
+      "added_by_last_sensor": 0.0083,
+      "priority_share": 0.585,
+      "area_share": 0.527,
+      "fire_share": 0.791
+    },
+    {
+      "k": 38,
+      "objective_share": 0.477,
+      "added_by_last_sensor": 0.008,
+      "priority_share": 0.596,
+      "area_share": 0.543,
+      "fire_share": 0.793
+    },
+    {
+      "k": 39,
+      "objective_share": 0.485,
+      "added_by_last_sensor": 0.0079,
+      "priority_share": 0.606,
+      "area_share": 0.561,
+      "fire_share": 0.793
+    },
+    {
+      "k": 40,
+      "objective_share": 0.493,
+      "added_by_last_sensor": 0.0079,
+      "priority_share": 0.615,
+      "area_share": 0.573,
+      "fire_share": 0.793
+    },
+    {
+      "k": 41,
+      "objective_share": 0.501,
+      "added_by_last_sensor": 0.0077,
+      "priority_share": 0.625,
+      "area_share": 0.586,
+      "fire_share": 0.794
+    },
+    {
+      "k": 42,
+      "objective_share": 0.509,
+      "added_by_last_sensor": 0.0076,
+      "priority_share": 0.634,
+      "area_share": 0.6,
+      "fire_share": 0.795
+    },
+    {
+      "k": 43,
+      "objective_share": 0.516,
+      "added_by_last_sensor": 0.0075,
+      "priority_share": 0.642,
+      "area_share": 0.605,
+      "fire_share": 0.817
+    },
+    {
+      "k": 44,
+      "objective_share": 0.523,
+      "added_by_last_sensor": 0.0074,
+      "priority_share": 0.649,
+      "area_share": 0.611,
+      "fire_share": 0.817
+    },
+    {
+      "k": 45,
+      "objective_share": 0.531,
+      "added_by_last_sensor": 0.0073,
+      "priority_share": 0.658,
+      "area_share": 0.618,
+      "fire_share": 0.833
+    },
+    {
+      "k": 46,
+      "objective_share": 0.538,
+      "added_by_last_sensor": 0.0073,
+      "priority_share": 0.666,
+      "area_share": 0.624,
+      "fire_share": 0.841
+    },
+    {
+      "k": 47,
+      "objective_share": 0.545,
+      "added_by_last_sensor": 0.0073,
+      "priority_share": 0.676,
+      "area_share": 0.639,
+      "fire_share": 0.843
+    },
+    {
+      "k": 48,
+      "objective_share": 0.552,
+      "added_by_last_sensor": 0.0071,
+      "priority_share": 0.685,
+      "area_share": 0.647,
+      "fire_share": 0.847
+    },
+    {
+      "k": 49,
+      "objective_share": 0.559,
+      "added_by_last_sensor": 0.0069,
+      "priority_share": 0.693,
+      "area_share": 0.66,
+      "fire_share": 0.853
+    },
+    {
+      "k": 50,
+      "objective_share": 0.566,
+      "added_by_last_sensor": 0.0068,
+      "priority_share": 0.702,
+      "area_share": 0.673,
+      "fire_share": 0.853
+    },
+    {
+      "k": 51,
+      "objective_share": 0.573,
+      "added_by_last_sensor": 0.0065,
+      "priority_share": 0.71,
+      "area_share": 0.682,
+      "fire_share": 0.853
+    },
+    {
+      "k": 52,
+      "objective_share": 0.579,
+      "added_by_last_sensor": 0.0061,
+      "priority_share": 0.718,
+      "area_share": 0.692,
+      "fire_share": 0.853
+    },
+    {
+      "k": 53,
+      "objective_share": 0.585,
+      "added_by_last_sensor": 0.0061,
+      "priority_share": 0.725,
+      "area_share": 0.698,
+      "fire_share": 0.853
+    },
+    {
+      "k": 54,
+      "objective_share": 0.591,
+      "added_by_last_sensor": 0.0059,
+      "priority_share": 0.732,
+      "area_share": 0.706,
+      "fire_share": 0.853
+    },
+    {
+      "k": 55,
+      "objective_share": 0.596,
+      "added_by_last_sensor": 0.0058,
+      "priority_share": 0.738,
+      "area_share": 0.711,
+      "fire_share": 0.853
+    },
+    {
+      "k": 56,
+      "objective_share": 0.602,
+      "added_by_last_sensor": 0.0056,
+      "priority_share": 0.745,
+      "area_share": 0.721,
+      "fire_share": 0.854
+    },
+    {
+      "k": 57,
+      "objective_share": 0.608,
+      "added_by_last_sensor": 0.0056,
+      "priority_share": 0.752,
+      "area_share": 0.728,
+      "fire_share": 0.854
+    },
+    {
+      "k": 58,
+      "objective_share": 0.613,
+      "added_by_last_sensor": 0.0055,
+      "priority_share": 0.759,
+      "area_share": 0.735,
+      "fire_share": 0.854
+    },
+    {
+      "k": 59,
+      "objective_share": 0.619,
+      "added_by_last_sensor": 0.0054,
+      "priority_share": 0.764,
+      "area_share": 0.739,
+      "fire_share": 0.855
+    },
+    {
+      "k": 60,
+      "objective_share": 0.624,
+      "added_by_last_sensor": 0.0052,
+      "priority_share": 0.77,
+      "area_share": 0.745,
+      "fire_share": 0.859
+    }
+  ],
+  "coverage_bounds": {
+    "10": {
+      "k": 10,
+      "greedy_share": 0.174,
+      "lp_bound_share": 0.174,
+      "greedy_over_lp_bound": 0.999,
+      "integer_proven": true,
+      "integer_status": "optimal",
+      "integer_time_limit_s": 300,
+      "lp_rows": 12372,
+      "random": {
+        "n_placements": 200,
+        "seed": 20261113,
+        "mean": 0.067,
+        "min": 0.038,
+        "max": 0.095
+      },
+      "integer_optimum_share": 0.174,
+      "greedy_over_integer_optimum": 1.0
+    },
+    "20": {
+      "k": 20,
+      "greedy_share": 0.305,
+      "lp_bound_share": 0.306,
+      "greedy_over_lp_bound": 0.996,
+      "integer_proven": true,
+      "integer_status": "optimal",
+      "integer_time_limit_s": 300,
+      "lp_rows": 12372,
+      "random": {
+        "n_placements": 200,
+        "seed": 20261113,
+        "mean": 0.127,
+        "min": 0.085,
+        "max": 0.173
+      },
+      "integer_optimum_share": 0.306,
+      "greedy_over_integer_optimum": 0.997
+    },
+    "40": {
+      "k": 40,
+      "greedy_share": 0.493,
+      "lp_bound_share": 0.502,
+      "greedy_over_lp_bound": 0.983,
+      "integer_proven": true,
+      "integer_status": "optimal",
+      "integer_time_limit_s": 300,
+      "lp_rows": 12372,
+      "random": {
+        "n_placements": 200,
+        "seed": 20261113,
+        "mean": 0.231,
+        "min": 0.19,
+        "max": 0.268
+      },
+      "integer_optimum_share": 0.5,
+      "greedy_over_integer_optimum": 0.986
+    }
+  },
+  "fire_history_own_objective_share": {
+    "10": 0.633,
+    "20": 0.832,
+    "40": 0.952
+  },
+  "headline": {
+    "satellite_only": {
+      "n_sensors": 0,
+      "sites": [],
+      "priority_share": 0.0,
+      "area_share": 0.0,
+      "fire_share": 0.0,
+      "mean_detection_h": 6.0,
+      "saved_h": 0.0,
+      "share_at_ignition": 0.0,
+      "share_after_spread": 0.0,
+      "share_satellite": 1.0
+    },
+    "10": {
+      "coverage": {
+        "n_sensors": 10,
+        "sites": [
+          [
+            41,
+            24
+          ],
+          [
+            51,
+            18
+          ],
+          [
+            74,
+            79
+          ],
+          [
+            75,
+            164
+          ],
+          [
+            85,
+            98
+          ],
+          [
+            89,
+            158
+          ],
+          [
+            90,
+            75
+          ],
+          [
+            91,
+            124
+          ],
+          [
+            94,
+            111
+          ],
+          [
+            98,
+            135
+          ]
+        ],
+        "priority_share": 0.219,
+        "area_share": 0.164,
+        "fire_share": 0.449,
+        "mean_detection_h": 3.319,
+        "saved_h": 2.681,
+        "share_at_ignition": 0.415,
+        "share_after_spread": 0.09,
+        "share_satellite": 0.495
+      },
+      "fire_history": {
+        "n_sensors": 10,
+        "sites": [
+          [
+            19,
+            31
+          ],
+          [
+            36,
+            63
+          ],
+          [
+            41,
+            24
+          ],
+          [
+            44,
+            80
+          ],
+          [
+            51,
+            18
+          ],
+          [
+            60,
+            25
+          ],
+          [
+            90,
+            75
+          ],
+          [
+            90,
+            87
+          ],
+          [
+            97,
+            126
+          ],
+          [
+            99,
+            74
+          ]
+        ],
+        "priority_share": 0.171,
+        "area_share": 0.124,
+        "fire_share": 0.691,
+        "mean_detection_h": 1.889,
+        "saved_h": 4.111,
+        "share_at_ignition": 0.638,
+        "share_after_spread": 0.116,
+        "share_satellite": 0.246
+      },
+      "timed_greedy": {
+        "n_sensors": 10,
+        "sites": [
+          [
+            21,
+            28
+          ],
+          [
+            41,
+            24
+          ],
+          [
+            45,
+            82
+          ],
+          [
+            55,
+            22
+          ],
+          [
+            60,
+            25
+          ],
+          [
+            88,
+            161
+          ],
+          [
+            90,
+            80
+          ],
+          [
+            97,
+            126
+          ],
+          [
+            97,
+            166
+          ],
+          [
+            99,
+            74
+          ]
+        ],
+        "priority_share": 0.168,
+        "area_share": 0.115,
+        "fire_share": 0.642,
+        "mean_detection_h": 2.022,
+        "saved_h": 3.978,
+        "share_at_ignition": 0.605,
+        "share_after_spread": 0.144,
+        "share_satellite": 0.251
+      }
+    },
+    "20": {
+      "coverage": {
+        "n_sensors": 20,
+        "sites": [
+          [
+            41,
+            24
+          ],
+          [
+            51,
+            18
+          ],
+          [
+            59,
+            45
+          ],
+          [
+            60,
+            25
+          ],
+          [
+            68,
+            62
+          ],
+          [
+            68,
+            152
+          ],
+          [
+            74,
+            79
+          ],
+          [
+            75,
+            113
+          ],
+          [
+            75,
+            164
+          ],
+          [
+            76,
+            130
+          ],
+          [
+            83,
+            61
+          ],
+          [
+            85,
+            98
+          ],
+          [
+            89,
+            158
+          ],
+          [
+            90,
+            75
+          ],
+          [
+            90,
+            87
+          ],
+          [
+            91,
+            124
+          ],
+          [
+            93,
+            172
+          ],
+          [
+            94,
+            111
+          ],
+          [
+            98,
+            135
+          ],
+          [
+            111,
+            125
+          ]
+        ],
+        "priority_share": 0.381,
+        "area_share": 0.307,
+        "fire_share": 0.592,
+        "mean_detection_h": 2.337,
+        "saved_h": 3.663,
+        "share_at_ignition": 0.564,
+        "share_after_spread": 0.125,
+        "share_satellite": 0.311
+      },
+      "fire_history": {
+        "n_sensors": 20,
+        "sites": [
+          [
+            14,
+            30
+          ],
+          [
+            19,
+            31
+          ],
+          [
+            26,
+            36
+          ],
+          [
+            34,
+            25
+          ],
+          [
+            36,
+            63
+          ],
+          [
+            41,
+            24
+          ],
+          [
+            44,
+            80
+          ],
+          [
+            49,
+            23
+          ],
+          [
+            51,
+            18
+          ],
+          [
+            60,
+            25
+          ],
+          [
+            61,
+            19
+          ],
+          [
+            86,
+            164
+          ],
+          [
+            88,
+            175
+          ],
+          [
+            90,
+            75
+          ],
+          [
+            90,
+            87
+          ],
+          [
+            97,
+            109
+          ],
+          [
+            97,
+            126
+          ],
+          [
+            99,
+            74
+          ],
+          [
+            102,
+            166
+          ],
+          [
+            109,
+            118
+          ]
+        ],
+        "priority_share": 0.269,
+        "area_share": 0.2,
+        "fire_share": 0.879,
+        "mean_detection_h": 0.805,
+        "saved_h": 5.195,
+        "share_at_ignition": 0.841,
+        "share_after_spread": 0.065,
+        "share_satellite": 0.094
+      },
+      "timed_greedy": {
+        "n_sensors": 20,
+        "sites": [
+          [
+            14,
+            30
+          ],
+          [
+            21,
+            28
+          ],
+          [
+            26,
+            36
+          ],
+          [
+            33,
+            25
+          ],
+          [
+            36,
+            60
+          ],
+          [
+            41,
+            24
+          ],
+          [
+            45,
+            82
+          ],
+          [
+            49,
+            23
+          ],
+          [
+            55,
+            22
+          ],
+          [
+            60,
+            25
+          ],
+          [
+            87,
+            71
+          ],
+          [
+            88,
+            161
+          ],
+          [
+            89,
+            174
+          ],
+          [
+            90,
+            80
+          ],
+          [
+            90,
+            87
+          ],
+          [
+            97,
+            126
+          ],
+          [
+            97,
+            166
+          ],
+          [
+            99,
+            74
+          ],
+          [
+            103,
+            114
+          ],
+          [
+            114,
+            127
+          ]
+        ],
+        "priority_share": 0.263,
+        "area_share": 0.195,
+        "fire_share": 0.859,
+        "mean_detection_h": 0.932,
+        "saved_h": 5.068,
+        "share_at_ignition": 0.808,
+        "share_after_spread": 0.094,
+        "share_satellite": 0.098
+      }
+    },
+    "40": {
+      "coverage": {
+        "n_sensors": 40,
+        "sites": [
+          [
+            15,
+            27
+          ],
+          [
+            26,
+            36
+          ],
+          [
+            34,
+            99
+          ],
+          [
+            40,
+            59
+          ],
+          [
+            41,
+            24
+          ],
+          [
+            41,
+            77
+          ],
+          [
+            41,
+            112
+          ],
+          [
+            50,
+            34
+          ],
+          [
+            50,
+            67
+          ],
+          [
+            51,
+            18
+          ],
+          [
+            54,
+            111
+          ],
+          [
+            56,
+            94
+          ],
+          [
+            59,
+            45
+          ],
+          [
+            60,
+            25
+          ],
+          [
+            63,
+            79
+          ],
+          [
+            64,
+            121
+          ],
+          [
+            65,
+            138
+          ],
+          [
+            67,
+            40
+          ],
+          [
+            68,
+            62
+          ],
+          [
+            68,
+            152
+          ],
+          [
+            72,
+            94
+          ],
+          [
+            74,
+            79
+          ],
+          [
+            75,
+            113
+          ],
+          [
+            75,
+            164
+          ],
+          [
+            76,
+            130
+          ],
+          [
+            82,
+            142
+          ],
+          [
+            83,
+            61
+          ],
+          [
+            85,
+            98
+          ],
+          [
+            89,
+            158
+          ],
+          [
+            90,
+            75
+          ],
+          [
+            90,
+            87
+          ],
+          [
+            91,
+            124
+          ],
+          [
+            93,
+            172
+          ],
+          [
+            94,
+            102
+          ],
+          [
+            94,
+            111
+          ],
+          [
+            97,
+            147
+          ],
+          [
+            98,
+            135
+          ],
+          [
+            99,
+            74
+          ],
+          [
+            104,
+            121
+          ],
+          [
+            111,
+            125
+          ]
+        ],
+        "priority_share": 0.615,
+        "area_share": 0.573,
+        "fire_share": 0.793,
+        "mean_detection_h": 1.108,
+        "saved_h": 4.892,
+        "share_at_ignition": 0.76,
+        "share_after_spread": 0.149,
+        "share_satellite": 0.091
+      },
+      "fire_history": {
+        "n_sensors": 40,
+        "sites": [
+          [
+            14,
+            30
+          ],
+          [
+            15,
+            32
+          ],
+          [
+            19,
+            31
+          ],
+          [
+            20,
+            27
+          ],
+          [
+            20,
+            58
+          ],
+          [
+            26,
+            36
+          ],
+          [
+            34,
+            25
+          ],
+          [
+            36,
+            63
+          ],
+          [
+            41,
+            24
+          ],
+          [
+            44,
+            80
+          ],
+          [
+            47,
+            16
+          ],
+          [
+            49,
+            23
+          ],
+          [
+            51,
+            18
+          ],
+          [
+            53,
+            21
+          ],
+          [
+            60,
+            25
+          ],
+          [
+            61,
+            19
+          ],
+          [
+            61,
+            32
+          ],
+          [
+            65,
+            79
+          ],
+          [
+            68,
+            152
+          ],
+          [
+            75,
+            164
+          ],
+          [
+            80,
+            118
+          ],
+          [
+            81,
+            98
+          ],
+          [
+            83,
+            82
+          ],
+          [
+            86,
+            164
+          ],
+          [
+            88,
+            110
+          ],
+          [
+            88,
+            175
+          ],
+          [
+            90,
+            75
+          ],
+          [
+            90,
+            87
+          ],
+          [
+            91,
+            124
+          ],
+          [
+            92,
+            153
+          ],
+          [
+            94,
+            173
+          ],
+          [
+            96,
+            83
+          ],
+          [
+            96,
+            97
+          ],
+          [
+            97,
+            109
+          ],
+          [
+            97,
+            126
+          ],
+          [
+            99,
+            74
+          ],
+          [
+            100,
+            136
+          ],
+          [
+            102,
+            166
+          ],
+          [
+            109,
+            118
+          ],
+          [
+            114,
+            127
+          ]
+        ],
+        "priority_share": 0.451,
+        "area_share": 0.359,
+        "fire_share": 0.975,
+        "mean_detection_h": 0.219,
+        "saved_h": 5.781,
+        "share_at_ignition": 0.953,
+        "share_after_spread": 0.029,
+        "share_satellite": 0.018
+      },
+      "timed_greedy": {
+        "n_sensors": 40,
+        "sites": [
+          [
+            14,
+            30
+          ],
+          [
+            15,
+            32
+          ],
+          [
+            20,
+            59
+          ],
+          [
+            21,
+            28
+          ],
+          [
+            26,
+            36
+          ],
+          [
+            33,
+            25
+          ],
+          [
+            36,
+            60
+          ],
+          [
+            41,
+            24
+          ],
+          [
+            45,
+            82
+          ],
+          [
+            47,
+            66
+          ],
+          [
+            49,
+            23
+          ],
+          [
+            50,
+            15
+          ],
+          [
+            55,
+            22
+          ],
+          [
+            59,
+            19
+          ],
+          [
+            60,
+            25
+          ],
+          [
+            65,
+            28
+          ],
+          [
+            65,
+            79
+          ],
+          [
+            69,
+            154
+          ],
+          [
+            75,
+            164
+          ],
+          [
+            81,
+            98
+          ],
+          [
+            82,
+            83
+          ],
+          [
+            86,
+            117
+          ],
+          [
+            87,
+            71
+          ],
+          [
+            88,
+            161
+          ],
+          [
+            89,
+            174
+          ],
+          [
+            90,
+            80
+          ],
+          [
+            90,
+            87
+          ],
+          [
+            91,
+            94
+          ],
+          [
+            91,
+            107
+          ],
+          [
+            93,
+            123
+          ],
+          [
+            93,
+            154
+          ],
+          [
+            97,
+            126
+          ],
+          [
+            97,
+            166
+          ],
+          [
+            98,
+            81
+          ],
+          [
+            98,
+            174
+          ],
+          [
+            99,
+            74
+          ],
+          [
+            102,
+            143
+          ],
+          [
+            103,
+            114
+          ],
+          [
+            104,
+            132
+          ],
+          [
+            114,
+            127
+          ]
+        ],
+        "priority_share": 0.438,
+        "area_share": 0.352,
+        "fire_share": 0.958,
+        "mean_detection_h": 0.325,
+        "saved_h": 5.675,
+        "share_at_ignition": 0.924,
+        "share_after_spread": 0.054,
+        "share_satellite": 0.022
+      }
+    }
+  },
+  "spread_model_effect": [
+    {
+      "r0_m_min": 0.5,
+      "baseline_h": 3.0,
+      "k": 20,
+      "shared_sites": 8,
+      "mean_detection_h_timed": 0.525,
+      "mean_detection_h_fire_history": 0.479,
+      "timed_minus_fire_history_h": 0.046,
+      "ci95_low_h": 0.011,
+      "ci95_high_h": 0.081
+    },
+    {
+      "r0_m_min": 0.5,
+      "baseline_h": 6.0,
+      "k": 20,
+      "shared_sites": 8,
+      "mean_detection_h_timed": 1.049,
+      "mean_detection_h_fire_history": 0.957,
+      "timed_minus_fire_history_h": 0.093,
+      "ci95_low_h": 0.02,
+      "ci95_high_h": 0.162
+    },
+    {
+      "r0_m_min": 0.5,
+      "baseline_h": 12.0,
+      "k": 20,
+      "shared_sites": 8,
+      "mean_detection_h_timed": 2.08,
+      "mean_detection_h_fire_history": 1.859,
+      "timed_minus_fire_history_h": 0.221,
+      "ci95_low_h": 0.082,
+      "ci95_high_h": 0.361
+    },
+    {
+      "r0_m_min": 2.0,
+      "baseline_h": 3.0,
+      "k": 20,
+      "shared_sites": 8,
+      "mean_detection_h_timed": 0.52,
+      "mean_detection_h_fire_history": 0.465,
+      "timed_minus_fire_history_h": 0.055,
+      "ci95_low_h": 0.021,
+      "ci95_high_h": 0.09
+    },
+    {
+      "r0_m_min": 2.0,
+      "baseline_h": 6.0,
+      "k": 20,
+      "shared_sites": 8,
+      "mean_detection_h_timed": 0.932,
+      "mean_detection_h_fire_history": 0.805,
+      "timed_minus_fire_history_h": 0.127,
+      "ci95_low_h": 0.067,
+      "ci95_high_h": 0.184
+    },
+    {
+      "r0_m_min": 2.0,
+      "baseline_h": 12.0,
+      "k": 20,
+      "shared_sites": 9,
+      "mean_detection_h_timed": 1.351,
+      "mean_detection_h_fire_history": 1.323,
+      "timed_minus_fire_history_h": 0.028,
+      "ci95_low_h": -0.103,
+      "ci95_high_h": 0.165
+    },
+    {
+      "r0_m_min": 6.0,
+      "baseline_h": 3.0,
+      "k": 20,
+      "shared_sites": 8,
+      "mean_detection_h_timed": 0.412,
+      "mean_detection_h_fire_history": 0.358,
+      "timed_minus_fire_history_h": 0.054,
+      "ci95_low_h": 0.02,
+      "ci95_high_h": 0.089
+    },
+    {
+      "r0_m_min": 6.0,
+      "baseline_h": 6.0,
+      "k": 20,
+      "shared_sites": 7,
+      "mean_detection_h_timed": 0.576,
+      "mean_detection_h_fire_history": 0.59,
+      "timed_minus_fire_history_h": -0.014,
+      "ci95_low_h": -0.07,
+      "ci95_high_h": 0.043
+    },
+    {
+      "r0_m_min": 6.0,
+      "baseline_h": 12.0,
+      "k": 20,
+      "shared_sites": 3,
+      "mean_detection_h_timed": 0.753,
+      "mean_detection_h_fire_history": 0.946,
+      "timed_minus_fire_history_h": -0.193,
+      "ci95_low_h": -0.318,
+      "ci95_high_h": -0.071
+    }
+  ]
+}
