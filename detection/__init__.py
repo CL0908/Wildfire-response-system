@@ -8,3 +8,9 @@ from .fire_sim import (  # noqa: F401
     load_wind,
     simulate_scenarios,
 )
+from .objective import (  # noqa: E402,F401
+    DEFAULT_BASELINE_MIN,
+    score_detection,
+    site_detection_times,
+)
+from .solvers import DetectionPlacement, exact_detection, greedy_detection  # noqa: E402,F401

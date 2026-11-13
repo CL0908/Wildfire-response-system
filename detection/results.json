@@ -1,0 +1,542 @@
+{
+  "simulated": true,
+  "note": "SIMULATED from a simplified, uncalibrated fire-spread model; not a prediction of real fires or real detection times.",
+  "assumptions": [
+    "A sensor detects a fire the moment it enters a cell the sensor sees; no detection delay, no failures, no false alarms.",
+    "Satellite detection happens at a fixed delay after ignition (the baseline); this is an assumption, not a measurement.",
+    "Spread rate r0 is an assumption inside the range of experimental burns in deciduous forest elsewhere in Thailand; Khao Yai is mostly evergreen and has no published rate.",
+    "One wind value (speed and direction, drawn from daytime hours of the fire-season record) applies to the whole map for the whole scenario.",
+    "Ignitions are drawn from smoothed 2012 to 2025 satellite fire detections, inside the 20 x 20 sensor window only; fire spreads over the full 40 x 40 region."
+  ],
+  "instance": {
+    "n_sites": 16,
+    "n_sensors": 4,
+    "sensor_window": {
+      "row0": 15,
+      "col0": 3,
+      "n_rows": 20,
+      "n_cols": 20
+    },
+    "region_shape": [
+      40,
+      40
+    ],
+    "current_placement": [
+      4,
+      6,
+      8,
+      10
+    ],
+    "current_placement_equals_ilp_optimum": true,
+    "site_rows_cols_in_window": [
+      [
+        13,
+        19
+      ],
+      [
+        7,
+        17
+      ],
+      [
+        15,
+        13
+      ],
+      [
+        12,
+        12
+      ],
+      [
+        1,
+        14
+      ],
+      [
+        19,
+        2
+      ],
+      [
+        13,
+        15
+      ],
+      [
+        14,
+        8
+      ],
+      [
+        2,
+        5
+      ],
+      [
+        8,
+        3
+      ],
+      [
+        6,
+        12
+      ],
+      [
+        17,
+        9
+      ],
+      [
+        11,
+        14
+      ],
+      [
+        14,
+        17
+      ],
+      [
+        7,
+        18
+      ],
+      [
+        3,
+        16
+      ]
+    ],
+    "fire_history_sites": [
+      6,
+      7,
+      9,
+      10
+    ],
+    "fire_history_share_of_ignition_weight_seen": 0.7375,
+    "n_subsets_brute_forced": 1820,
+    "ignition_weight_share_seen_by_current": 0.5751
+  },
+  "scenarios": {
+    "n_train": 4000,
+    "n_test": 4000,
+    "train_seed": 101,
+    "test_seed": 202,
+    "quick": false
+  },
+  "headline": {
+    "r0_m_min": 2.0,
+    "baseline_h": 6.0,
+    "placements": {
+      "satellite_only": {
+        "sites": [],
+        "mean_detection_h": 6.0,
+        "saved_h": 0.0,
+        "share_at_ignition": 0.0,
+        "share_after_spread": 0.0,
+        "share_satellite": 1.0,
+        "p10_h": 6.0,
+        "p50_h": 6.0,
+        "p90_h": 6.0,
+        "train_saved_h": 0.0
+      },
+      "current": {
+        "sites": [
+          4,
+          6,
+          8,
+          10
+        ],
+        "mean_detection_h": 2.0878,
+        "saved_h": 3.9122,
+        "share_at_ignition": 0.579,
+        "share_after_spread": 0.1698,
+        "share_satellite": 0.2512,
+        "p10_h": 0.0,
+        "p50_h": 0.0,
+        "p90_h": 6.0,
+        "train_saved_h": 3.9068
+      },
+      "fire_history": {
+        "sites": [
+          6,
+          7,
+          9,
+          10
+        ],
+        "mean_detection_h": 1.0252,
+        "saved_h": 4.9748,
+        "share_at_ignition": 0.7433,
+        "share_after_spread": 0.1968,
+        "share_satellite": 0.06,
+        "p10_h": 0.0,
+        "p50_h": 0.0,
+        "p90_h": 4.5359,
+        "train_saved_h": 4.9451
+      },
+      "timed_greedy": {
+        "sites": [
+          6,
+          7,
+          9,
+          10
+        ],
+        "mean_detection_h": 1.0252,
+        "saved_h": 4.9748,
+        "share_at_ignition": 0.7433,
+        "share_after_spread": 0.1968,
+        "share_satellite": 0.06,
+        "p10_h": 0.0,
+        "p50_h": 0.0,
+        "p90_h": 4.5359,
+        "train_saved_h": 4.9451
+      },
+      "timed_exact": {
+        "sites": [
+          6,
+          7,
+          9,
+          10
+        ],
+        "mean_detection_h": 1.0252,
+        "saved_h": 4.9748,
+        "share_at_ignition": 0.7433,
+        "share_after_spread": 0.1968,
+        "share_satellite": 0.06,
+        "p10_h": 0.0,
+        "p50_h": 0.0,
+        "p90_h": 4.5359,
+        "train_saved_h": 4.9451
+      }
+    },
+    "bootstrap": {
+      "n_resamples": 1000,
+      "seed": 12345,
+      "note": "paired over TEST scenarios; difference in mean detection time, hours; negative = first placement detects earlier",
+      "fire_history_minus_current": {
+        "mean_diff_h": -1.0626,
+        "ci95_low_h": -1.15,
+        "ci95_high_h": -0.9815
+      },
+      "timed_exact_minus_fire_history": {
+        "mean_diff_h": 0.0,
+        "ci95_low_h": 0.0,
+        "ci95_high_h": 0.0
+      }
+    },
+    "exact_solver": {
+      "proven_optimal": true,
+      "status": "Optimal",
+      "time_limit_s": 120,
+      "n_distinct_rows": 2912,
+      "n_x_variables": 13120,
+      "matches_brute_force": true,
+      "same_sites_as_brute_force": true,
+      "brute_force_sites": [
+        6,
+        7,
+        9,
+        10
+      ]
+    },
+    "greedy_matches_brute_force": true,
+    "train_runner_up": {
+      "sites": [
+        6,
+        7,
+        8,
+        10
+      ],
+      "gap_to_best_h": 0.0192
+    }
+  },
+  "sensitivity": [
+    {
+      "r0_m_min": 0.5,
+      "baseline_h": 3.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 1.737,
+      "test_saved_h_fire_history": 2.2298,
+      "test_saved_h_timed_optimum": 2.2298,
+      "timed_optimum_saving_share_after_spread": 0.0
+    },
+    {
+      "r0_m_min": 0.5,
+      "baseline_h": 6.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 3.4755,
+      "test_saved_h_fire_history": 4.4611,
+      "test_saved_h_timed_optimum": 4.4611,
+      "timed_optimum_saving_share_after_spread": 0.0004
+    },
+    {
+      "r0_m_min": 0.5,
+      "baseline_h": 9.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 5.2369,
+      "test_saved_h_fire_history": 6.7324,
+      "test_saved_h_timed_optimum": 6.7324,
+      "timed_optimum_saving_share_after_spread": 0.0064
+    },
+    {
+      "r0_m_min": 0.5,
+      "baseline_h": 12.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 7.119,
+      "test_saved_h_fire_history": 9.135,
+      "test_saved_h_timed_optimum": 9.135,
+      "timed_optimum_saving_share_after_spread": 0.0237
+    },
+    {
+      "r0_m_min": 1.0,
+      "baseline_h": 3.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 1.7378,
+      "test_saved_h_fire_history": 2.2306,
+      "test_saved_h_timed_optimum": 2.2306,
+      "timed_optimum_saving_share_after_spread": 0.0004
+    },
+    {
+      "r0_m_min": 1.0,
+      "baseline_h": 6.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 3.5595,
+      "test_saved_h_fire_history": 4.5675,
+      "test_saved_h_timed_optimum": 4.5675,
+      "timed_optimum_saving_share_after_spread": 0.0237
+    },
+    {
+      "r0_m_min": 1.0,
+      "baseline_h": 9.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 5.6236,
+      "test_saved_h_fire_history": 7.1802,
+      "test_saved_h_timed_optimum": 7.1802,
+      "timed_optimum_saving_share_after_spread": 0.0684
+    },
+    {
+      "r0_m_min": 1.0,
+      "baseline_h": 12.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 7.8244,
+      "test_saved_h_fire_history": 9.9496,
+      "test_saved_h_timed_optimum": 9.9496,
+      "timed_optimum_saving_share_after_spread": 0.1036
+    },
+    {
+      "r0_m_min": 2.0,
+      "baseline_h": 3.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 1.7797,
+      "test_saved_h_fire_history": 2.2838,
+      "test_saved_h_timed_optimum": 2.2838,
+      "timed_optimum_saving_share_after_spread": 0.0237
+    },
+    {
+      "r0_m_min": 2.0,
+      "baseline_h": 6.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 3.9122,
+      "test_saved_h_fire_history": 4.9748,
+      "test_saved_h_timed_optimum": 4.9748,
+      "timed_optimum_saving_share_after_spread": 0.1036
+    },
+    {
+      "r0_m_min": 2.0,
+      "baseline_h": 9.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 6.2229,
+      "test_saved_h_fire_history": 7.8672,
+      "test_saved_h_timed_optimum": 7.8672,
+      "timed_optimum_saving_share_after_spread": 0.1497
+    },
+    {
+      "r0_m_min": 2.0,
+      "baseline_h": 12.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 8.6391,
+      "test_saved_h_fire_history": 10.844,
+      "test_saved_h_timed_optimum": 10.844,
+      "timed_optimum_saving_share_after_spread": 0.1775
+    },
+    {
+      "r0_m_min": 4.0,
+      "baseline_h": 3.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 1.9561,
+      "test_saved_h_fire_history": 2.4874,
+      "test_saved_h_timed_optimum": 2.4874,
+      "timed_optimum_saving_share_after_spread": 0.1036
+    },
+    {
+      "r0_m_min": 4.0,
+      "baseline_h": 6.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 4.3196,
+      "test_saved_h_fire_history": 5.422,
+      "test_saved_h_timed_optimum": 5.422,
+      "timed_optimum_saving_share_after_spread": 0.1775
+    },
+    {
+      "r0_m_min": 4.0,
+      "baseline_h": 9.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 6.8432,
+      "test_saved_h_fire_history": 8.4201,
+      "test_saved_h_timed_optimum": 8.4201,
+      "timed_optimum_saving_share_after_spread": 0.2056
+    },
+    {
+      "r0_m_min": 4.0,
+      "baseline_h": 12.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 9.4842,
+      "test_saved_h_fire_history": 11.4201,
+      "test_saved_h_timed_optimum": 11.4201,
+      "timed_optimum_saving_share_after_spread": 0.219
+    },
+    {
+      "r0_m_min": 6.0,
+      "baseline_h": 3.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 2.0743,
+      "test_saved_h_fire_history": 2.6224,
+      "test_saved_h_timed_optimum": 2.6224,
+      "timed_optimum_saving_share_after_spread": 0.1497
+    },
+    {
+      "r0_m_min": 6.0,
+      "baseline_h": 6.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 4.5621,
+      "test_saved_h_fire_history": 5.6134,
+      "test_saved_h_timed_optimum": 5.6134,
+      "timed_optimum_saving_share_after_spread": 0.2056
+    },
+    {
+      "r0_m_min": 6.0,
+      "baseline_h": 9.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 7.2279,
+      "test_saved_h_fire_history": 8.6134,
+      "test_saved_h_timed_optimum": 8.6134,
+      "timed_optimum_saving_share_after_spread": 0.2234
+    },
+    {
+      "r0_m_min": 6.0,
+      "baseline_h": 12.0,
+      "timed_optimum_sites": [
+        6,
+        7,
+        9,
+        10
+      ],
+      "same_sites_as_fire_history": true,
+      "test_saved_h_current": 10.0355,
+      "test_saved_h_fire_history": 11.6134,
+      "test_saved_h_timed_optimum": 11.6134,
+      "timed_optimum_saving_share_after_spread": 0.232
+    }
+  ]
+}

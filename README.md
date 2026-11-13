@@ -55,6 +55,23 @@ Limits of the QAOA results: they come from a noiseless simulator that applies th
 
 `dashboards/` is a single-page React view of one pipeline run, in 2D or draped over the real terrain in 3D: the terrain layers (priority, hazard, ecological value, elevation, recorded fires, park mask), the candidate sites, and each method's placement and coverage, with the benchmark table and the hardware runs underneath. `python main.py` writes `dashboards/public/results.json` and `python hardware_runs/export_dashboard.py` writes `dashboards/public/hardware.json`; nothing in it is mocked and nothing is live. `.github/workflows/pages.yml` publishes it to GitHub Pages once a repo admin sets Settings > Pages > Source to "GitHub Actions". See `dashboards/README.md`.
 
+## Time to detection (simulated)
+
+`detection/` compares sensor placements by how much sooner they would detect a fire than a satellite alone, on simulated fires from a simplified spread model that has not been fitted to or checked against any real fire. Every number here is simulated and none is a prediction of real fires or real detection times. Assumptions: a sensor detects a fire the moment it enters a cell it sees; the satellite detects every fire a fixed delay after ignition (6 hours here, an assumption, not a measurement); the spread rate (2 m/min at the headline setting) comes from burns in deciduous forest elsewhere in Thailand, while Khao Yai is mostly evergreen; one wind value applies to the whole map; ignitions are drawn from the 2012 to 2025 fire detections.
+
+The instance is the 4 sensors on 16 sites of the dashboard. Placements are chosen on 4,000 training scenarios and scored on 4,000 separate test scenarios:
+
+| Placement | Sites | Mean detection (h) | Hours saved vs satellite | Detected at ignition | Detected by sensor after spread | Left to satellite |
+|---|---|---|---|---|---|---|
+| Satellite only | none | 6.00 | 0.00 | 0% | 0% | 100% |
+| Current (hazard x value) | 4, 6, 8, 10 | 2.09 | 3.91 | 58% | 17% | 25% |
+| Fire-history coverage | 6, 7, 9, 10 | 1.03 | 4.97 | 74% | 20% | 6% |
+| Time to detection, exact | 6, 7, 9, 10 | 1.03 | 4.97 | 74% | 20% | 6% |
+
+The time-to-detection optimum was the same four sites as the fire-history coverage optimum (the four sites that see the most ignition weight, with no spread model) in all 20 settings tried, spread rates of 0.5 to 6 m/min and satellite delays of 3 to 12 hours. At these settings the spread model did not change which sites are chosen. The match depends on the random draw: sites 8 and 9 are nearly tied (0.02 hours apart at the headline setting), and with other scenario seeds the time-to-detection optimum sometimes takes site 8 instead; the 20 settings share one set of random draws, so they are not 20 independent confirmations. Sensors are credited only with cells inside the 20 x 20 window, which works against sites near its edge. The current placement was optimised for hazard x value, which includes what is worth protecting, while the other rows optimise detection of ignitions only, so its lower score here does not make it the worse placement and no winner is declared. The last three rows are chosen and scored on fires drawn from the same fire-history distribution, which is circular in the same way as the hazard layer, whose fire-density term comes from the same detections; the train and test split separates only the random scenarios.
+
+`detection/RESULTS.md` has the full tables, percentiles, bootstrap intervals and the sensitivity grid. Regenerate with `python -m detection.run` (a few seconds; the output is the same on every run).
+
 ## Ranger response
 
 `ranger_response/` plans where a ranger crew should cut firebreaks, and in what order, once a fire is detected. It runs on the synthetic terrain. It is a classical planner modelled on the Moving Firefighter Problem: fire spreads cell to cell through fuel, the crew takes time to travel, and a firebreak only holds if it is finished before the fire arrives. On the default case one crew's six firebreaks cut the burned area from 230 cells to 42. See `ranger_response/README.md` for the model and its simplifications.
