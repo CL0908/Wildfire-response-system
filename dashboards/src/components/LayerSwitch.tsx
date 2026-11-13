@@ -1,12 +1,10 @@
-import type { StageLayer } from '../lib/layers'
-
-interface Props {
-  layers: { key: StageLayer; label: string }[]
-  value: StageLayer
-  onChange: (key: StageLayer) => void
+interface Props<K extends string> {
+  layers: { key: K; label: string }[]
+  value: K
+  onChange: (key: K) => void
 }
 
-export default function LayerSwitch({ layers, value, onChange }: Props) {
+export default function LayerSwitch<K extends string>({ layers, value, onChange }: Props<K>) {
   // Landscape (not a data layer) has the first row to itself. The data layers share an
   // equal-width grid: 3 columns for 3 or 6, otherwise 2 with a full-width last button when the
   // count is odd, so the control never ends in a lone short button.

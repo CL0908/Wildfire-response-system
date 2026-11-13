@@ -17,6 +17,7 @@ The page reads these files from `public/`, all written by Python. From the repo 
 | `public/results.json` | `python main.py` | map layers, methods, benchmark table |
 | `public/hardware.json` | `python hardware_runs/export_dashboard.py` | Hardware runs section |
 | `public/terrain.bin`, `public/terrain.json` | `python data/export_terrain_mesh.py` (needs `requirements-data.txt`) | 3D terrain surface |
+| `public/park.json`, `public/park_terrain.*`, `public/park_landcover.*` | `python data/export_park_dashboard.py` (needs `requirements-data.txt`; `--skip-rasters` rewrites `park.json` only) | Whole-park scale: grid layers, placements for 10, 20 and 40 sensors from `park/results.json`, 150 m terrain and land cover |
 
 Do not edit any of them by hand. If `results.json` is missing, the page says so. `hardware.json` is optional: if it is missing or malformed, the Hardware runs section is left out. The page makes no network requests beyond these files.
 

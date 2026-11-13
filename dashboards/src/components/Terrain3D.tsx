@@ -13,8 +13,10 @@ import {
   FogExp2,
   Group,
   HemisphereLight,
+  LineBasicMaterial,
   LinearFilter,
   LinearMipmapLinearFilter,
+  LineSegments,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -33,7 +35,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import CellReadout from './CellReadout'
 import Legend from './Legend'
 import LandscapeLegend from './LandscapeLegend'
-import { drawDrape } from '../lib/drape'
+import { ParkKey, ParkLegend } from './ParkLegend'
+import ParkReadout, { type ParkHover } from './ParkReadout'
+import { drawDrape, drawParkDrape, parkLayerRange } from '../lib/drape'
 import { buildFireMarks, type FireMarks } from '../lib/fireMarks'
 import type { Replay } from '../lib/fireReplay'
 import type { Detection } from '../lib/fires'
@@ -51,6 +55,7 @@ import {
 import {
   LANDSCAPE_LIGHT,
   addSkirtStrataUVs,
+  bakeShadow,
   buildCanopy,
   buildSky,
   fitSun,
@@ -58,11 +63,22 @@ import {
   groundUVs,
   paintGround,
   strataTexture,
+  sunDirection,
   type Canopy,
 } from '../lib/landscape'
 import {
+  PARK_LAYERS,
+  PARK_RULES,
+  parkPlacement,
+  type ParkData,
+  type ParkK,
+  type ParkLayer,
+  type ParkRule,
+} from '../lib/park'
+import { PARK_LINE_COLORS, parkBoundaryPositions, parkWindowBand } from '../lib/parkLines'
+import { SCALE_NOTE, sceneScale, type Scale, type SceneScale } from '../lib/scale'
+import {
   type TerrainState,
-  VERTICAL_EXAGGERATION,
   buildIndices,
   buildPositions,
   buildUVs,
@@ -86,6 +102,13 @@ interface Props {
   replayPlaying?: boolean
   /** The detections the replay was built from, in the same order. */
   detections?: readonly Detection[] | null
+  /** 'park' shows the whole park without markers, trees or data layers. The view is remounted on change. */
+  scale?: Scale
+  /** Whole park only: the placements and layers, what the ground shows, and the chosen sensor count and rule. */
+  parkData?: ParkData | null
+  parkLayer?: ParkLayer
+  parkK?: ParkK
+  parkRule?: ParkRule
   /** Called once if the 3D view cannot be shown (no WebGL, terrain files missing or unusable). */
   onUnavailable?: () => void
 }
@@ -93,7 +116,6 @@ interface Props {
 type Status = 'loading' | 'ready' | 'error'
 
 const FOV = 35
-const START_ELEVATION = (52 * Math.PI) / 180
 const MAX_POLAR = (78 * Math.PI) / 180
 
 // Scene metres. Masts are deliberately not to scale (a real 30 m mast would be invisible).
@@ -102,7 +124,6 @@ const MAST_RADIUS = 18
 const HEAD_SIZE = 250
 const DOT_SIZE = 170
 const LABEL_SIZE = 200
-const LABEL_SIZE_N = 900 // the "N" sprite's edge length
 // Landscape is busy green, so its markers are bigger, taller and outlined to stand out.
 const MAST_HEIGHT_L = 520
 const MAST_RADIUS_L = 24
@@ -112,7 +133,6 @@ const DOT_LIFT_L = 190 // dot centre above ground; clears the trees (about 100 m
 const LABEL_HEIGHT_L = 230 // the number pill's height; its width is twice this
 const ACCENT_FALLBACK = '#c2410c'
 const SKIRT_FALLBACK = '#243247' // the walls' colour comes from --terrain-skirt
-const SKIRT_DEPTH_M = 150 // real height of the cut block below the lowest ground
 // Wall brightness by the side it faces, so the block reads as solid: north, east, south, west.
 const SKIRT_SHADE = [0.95, 0.75, 0.6, 0.85]
 
@@ -157,6 +177,11 @@ interface GroundHover {
 }
 
 const MARKER_OUTLINE = '#ffffff'
+// Park masts are the Landscape markers scaled up with the scene (k = scene width over 10 km); the
+// 0.5 keeps 10 to 40 of them clear of the terrain at the opening view.
+const PARK_MAST_SCALE = 0.5
+const PARK_LINE_LIFT = 12 // metres per k above the ground, so the lines do not sink into slopes
+const PARK_WINDOW_BAND = 32 // metres per k: about 3 px at the opening view of the park
 
 function northLabel(): CanvasTexture {
   const size = 128
@@ -328,10 +353,10 @@ interface Fit {
  * area's half-extents as shares of the view's half-width and half-height. The target stays on the
  * vertical axis through the terrain centre so rotating still pivots about the middle of the map.
  */
-function fitAzimuth(points: Vector3[], aspect: number, azimuth: number, hx: number, hy: number, start: Fit, passes: number): Fit {
-  const cam = new PerspectiveCamera(FOV, aspect, 200, 120000)
-  const ce = Math.cos(START_ELEVATION)
-  const dir = new Vector3(Math.sin(azimuth) * ce, Math.sin(START_ELEVATION), Math.cos(azimuth) * ce)
+function fitAzimuth(points: Vector3[], aspect: number, azimuth: number, hx: number, hy: number, start: Fit, passes: number, sc: SceneScale): Fit {
+  const cam = new PerspectiveCamera(FOV, aspect, sc.near, sc.far)
+  const ce = Math.cos(sc.startElevation)
+  const dir = new Vector3(Math.sin(azimuth) * ce, Math.sin(sc.startElevation), Math.cos(azimuth) * ce)
   const target = new Vector3(0, start.targetY, 0)
   const p = new Vector3()
   const halfTan = Math.tan((FOV / 2) * (Math.PI / 180))
@@ -351,17 +376,17 @@ function fitAzimuth(points: Vector3[], aspect: number, azimuth: number, hx: numb
       maxX = Math.max(maxX, Math.abs(p.x))
     }
     // Raising the target by dy moves the scene down in the view by about dy * cos(elevation).
-    target.y += (((minY + maxY) / 2) * distance * halfTan) / Math.cos(START_ELEVATION)
+    target.y += (((minY + maxY) / 2) * distance * halfTan) / Math.cos(sc.startElevation)
     distance *= Math.max(maxX / hx, (maxY - minY) / 2 / hy)
   }
   return { distance, targetY: target.y }
 }
 
-function computeFits(points: Vector3[], aspect: number, hx: number, hy: number, startDistance: number): Fit[] {
+function computeFits(points: Vector3[], aspect: number, hx: number, hy: number, startDistance: number, sc: SceneScale): Fit[] {
   const fits: Fit[] = []
   let prev: Fit = { distance: startDistance, targetY: 0 }
   for (let i = 0; i < FIT_AZIMUTHS; i++) {
-    prev = fitAzimuth(points, aspect, (i / FIT_AZIMUTHS) * Math.PI * 2, hx, hy, prev, i === 0 ? 16 : 6)
+    prev = fitAzimuth(points, aspect, (i / FIT_AZIMUTHS) * Math.PI * 2, hx, hy, prev, i === 0 ? 16 : 6, sc)
     fits.push(prev)
   }
   return fits.map((f) => ({ distance: f.distance * FIT_SAFETY, targetY: f.targetY }))
@@ -413,6 +438,15 @@ function OverlayKey({ landscape }: { landscape: boolean }) {
   )
 }
 
+function parkAriaLabel(layer: ParkLayer, k: number, rule: ParkRule): string {
+  const ground =
+    layer === 'landscape'
+      ? 'on a sunny day, ground coloured by land cover'
+      : `coloured by ${PARK_LAYERS.find((l) => l.key === layer)?.label ?? layer}`
+  const ruleName = PARK_RULES.find((r) => r.key === rule)?.label.toLowerCase() ?? rule
+  return `3D terrain of the whole park ${ground}, with ${k} sensors placed by ${ruleName}, and the park boundary and the 10 km window outlined. It can be rotated and zoomed.`
+}
+
 function ariaLabel(layer: StageLayer, method: Method): string {
   if (layer === 'landscape') {
     return `3D landscape of the study area on a sunny day, ground coloured by land cover, with candidate sites and the sensors placed by ${method.name} at sites ${method.chosen.join(', ')}. It can be rotated and zoomed. The same information is in the 2D map.`
@@ -460,6 +494,11 @@ export default function Terrain3D({
   replayT = 0,
   replayPlaying = false,
   detections = null,
+  scale = 'window',
+  parkData = null,
+  parkLayer = 'landscape',
+  parkK = 20,
+  parkRule = 'fire_history',
   onUnavailable,
 }: Props) {
   const box = useRef<HTMLDivElement>(null)
@@ -470,21 +509,33 @@ export default function Terrain3D({
   const [status, setStatus] = useState<Status>('loading')
   const [message, setMessage] = useState('')
   const [hoverCell, setHoverCell] = useState<number | null>(null)
-  const [hoverGround, setHoverGround] = useState<GroundHover | null>(null)
+  const [hoverGround, setHoverGround] = useState<ParkHover | null>(null)
   // Classes present in the window for the Landscape key; 'none' when land cover could not be loaded.
   const [landKey, setLandKey] = useState<LandClass[] | 'none'>('none')
-  const latest = useRef<Props>({ results, layer, method })
+  const latest = useRef<Props>({ results, layer, method, parkData, parkLayer, parkK, parkRule })
   const update = useRef<Update | null>(null)
   const fireUpdate = useRef<FireUpdate | null>(null)
   const fireLatest = useRef<FireProps>({})
   const unavailable = useRef(onUnavailable)
-  const landscape = layer === 'landscape'
+  const park = scale === 'park'
+  // The park shows Landscape until its data has arrived.
+  const parkGround: ParkLayer = parkData ? parkLayer : 'landscape'
+  const landscape = park ? parkGround === 'landscape' : layer === 'landscape'
   const [lo, hi] = useMemo(
-    () => (layer === 'landscape' ? [0, 1] : layerRange(results.layers, layer)),
-    [results.layers, layer],
+    () => (park || layer === 'landscape' ? [0, 1] : layerRange(results.layers, layer)),
+    [results.layers, layer, park],
   )
   const info = LAYERS.find((l) => l.key === layer)
   const covered = useMemo(() => new Set(method.covered_cells), [method])
+  const parkPlaced = useMemo(
+    () => (parkData ? parkPlacement(parkData, parkK, parkRule) : null),
+    [parkData, parkK, parkRule],
+  )
+  const parkCovered = useMemo(() => (parkPlaced ? new Set(parkPlaced.covered) : null), [parkPlaced])
+  const parkRange = useMemo(
+    () => (parkData && parkGround !== 'landscape' && parkGround !== 'coverage' ? parkLayerRange(parkData, parkGround) : ([0, 1] as [number, number])),
+    [parkData, parkGround],
+  )
 
   // Layer and method changes only repaint the texture and markers; the scene is built once.
   useEffect(() => {
@@ -511,9 +562,9 @@ export default function Terrain3D({
   }, [aboutOpen])
 
   useEffect(() => {
-    latest.current = { results, layer, method }
+    latest.current = { results, layer, method, parkData, parkLayer, parkK, parkRule }
     update.current?.(latest.current)
-  }, [results, layer, method])
+  }, [results, layer, method, parkData, parkLayer, parkK, parkRule])
 
   // The replay clock only moves GPU attributes and asks for one render; nothing is rebuilt.
   useEffect(() => {
@@ -540,6 +591,9 @@ export default function Terrain3D({
         return
       }
       const { meta, heights } = state.terrain
+      // Every value that is a fixed length in metres comes from here (see lib/scale.ts).
+      const sc = sceneScale(scale, meta.width_m)
+      const exag = sc.exaggeration
       // Land cover must sit on exactly this mesh's pixel grid; otherwise Landscape uses elevation only.
       const land: LandcoverData | null =
         landState.status === 'ready' && matchesTerrain(landState.data, meta) ? landState.data : null
@@ -555,7 +609,7 @@ export default function Terrain3D({
       partial = renderer
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
       // The sun and terrain never move, so the shadow map is drawn once per switch to Landscape.
-      renderer.shadowMap.enabled = true
+      renderer.shadowMap.enabled = sc.shadowMap
       renderer.shadowMap.type = PCFSoftShadowMap
       renderer.shadowMap.autoUpdate = false
       const coarse = window.matchMedia('(pointer: coarse)').matches
@@ -567,10 +621,11 @@ export default function Terrain3D({
       const geometry = new BufferGeometry()
       geometry.setAttribute(
         'position',
-        new BufferAttribute(buildPositions(heights, meta, VERTICAL_EXAGGERATION), 3),
+        new BufferAttribute(buildPositions(heights, meta, exag), 3),
       )
       // The grid covers results.bounds, slightly less than the mesh, so UVs come from lat/lon.
-      const rect = gridSceneRect(meta, latest.current.results.bounds)
+      // The park grid covers the whole mesh; the window's grid sits inside it.
+      const rect = gridSceneRect(meta, sc.markers ? latest.current.results.bounds : meta.bounds)
       geometry.setAttribute('uv', new BufferAttribute(buildUVs(meta, rect), 2))
       geometry.setIndex(new BufferAttribute(buildIndices(meta.rows, meta.cols), 1))
       geometry.computeVertexNormals()
@@ -591,7 +646,7 @@ export default function Terrain3D({
       const skirtGeometry = buildSkirt(
         geometry.getAttribute('position').array as Float32Array,
         meta,
-        (meta.min_m - SKIRT_DEPTH_M) * VERTICAL_EXAGGERATION,
+        (meta.min_m - sc.skirtDepth) * exag,
       )
       const skirtShade = skirtGeometry.getAttribute('shade')
       const skirtColors = new Float32Array(skirtShade.count * 3)
@@ -606,8 +661,8 @@ export default function Terrain3D({
       skirt.raycast = () => {} // never a pick target
       skirt.receiveShadow = true
       scene.add(skirt)
-      const wallBaseY = (meta.min_m - SKIRT_DEPTH_M) * VERTICAL_EXAGGERATION
-      addSkirtStrataUVs(skirtGeometry, wallBaseY, meta.max_m * VERTICAL_EXAGGERATION)
+      const wallBaseY = (meta.min_m - sc.skirtDepth) * exag
+      addSkirtStrataUVs(skirtGeometry, wallBaseY, meta.max_m * exag, sc.strataRepeat)
       const landSkirtMaterial = new MeshStandardMaterial({ roughness: 1, metalness: 0, side: DoubleSide })
       let strata: CanvasTexture | null = null
 
@@ -626,12 +681,17 @@ export default function Terrain3D({
       canopy.name = 'landscape-canopy'
       const sky = buildSky()
       const landSun = new DirectionalLight(LANDSCAPE_LIGHT.sunColor, LANDSCAPE_LIGHT.sunIntensity)
-      landSun.castShadow = true
-      fitSun(landSun, meta.width_m / 2, meta.height_m / 2, wallBaseY, meta.max_m * VERTICAL_EXAGGERATION, coarse ? 1024 : 2048)
+      if (sc.shadowMap) {
+        landSun.castShadow = true
+        fitSun(landSun, meta.width_m / 2, meta.height_m / 2, wallBaseY, meta.max_m * exag, coarse ? 1024 : 2048)
+      } else {
+        // The park's cast shadows are baked into the ground texture; the sun only lights the surface.
+        landSun.position.copy(sunDirection()).multiplyScalar(30000 * sc.k)
+      }
       const hemi = new HemisphereLight(LANDSCAPE_LIGHT.skyColor, LANDSCAPE_LIGHT.groundColor, LANDSCAPE_LIGHT.hemiIntensity)
       landscapeGroup.add(sky.mesh, landSun, landSun.target, hemi, canopy)
       scene.add(landscapeGroup)
-      const haze = new FogExp2(LANDSCAPE_LIGHT.fogColor, LANDSCAPE_LIGHT.fogDensity)
+      const haze = new FogExp2(LANDSCAPE_LIGHT.fogColor, sc.fogDensity)
       let canopyMesh: Canopy | null = null
       let lookIsLandscape = false
       // Built when the detections are first available; rebuilt if they change.
@@ -651,7 +711,10 @@ export default function Terrain3D({
         skirt.material = isLandscape ? landSkirtMaterial : skirtMaterial
         if (isLandscape) {
           if (!groundTex) {
-            groundTex = groundTextures(paintGround(heights, meta, land), renderer.capabilities.getMaxAnisotropy())
+            groundTex = groundTextures(
+              paintGround(heights, meta, land, sc.groundTexels, sc.shadowMap ? null : bakeShadow(heights, meta, exag)),
+              renderer.capabilities.getMaxAnisotropy(),
+            )
             landMaterial.map = groundTex.map
             landMaterial.roughnessMap = groundTex.roughnessMap
             landMaterial.needsUpdate = true
@@ -662,7 +725,7 @@ export default function Terrain3D({
             landSkirtMaterial.needsUpdate = true
           }
           // Built once, on first use; hiding the group is all a layer switch does.
-          if (!canopyMesh) {
+          if (sc.trees && !canopyMesh) {
             canopyMesh = buildCanopy(heights, meta, land, coarse)
             canopy.add(canopyMesh.mesh)
           }
@@ -673,8 +736,8 @@ export default function Terrain3D({
       const labelTexture = northLabel()
       const labelMaterial = new SpriteMaterial({ map: labelTexture, depthTest: false, fog: false, toneMapped: false })
       const label = new Sprite(labelMaterial)
-      label.scale.setScalar(LABEL_SIZE_N)
-      label.position.set(0, meta.max_m * VERTICAL_EXAGGERATION * 0.5, -meta.height_m / 2 - 700)
+      label.scale.setScalar(sc.northLabelSize)
+      label.position.set(0, meta.max_m * exag * 0.5, -meta.height_m / 2 - sc.northLabelOffset)
       label.renderOrder = 1
       scene.add(label)
 
@@ -694,17 +757,44 @@ export default function Terrain3D({
       // A white back-face shell round each mast reads as a light outline against green (Landscape only).
       const outlineGeometry = new CylinderGeometry(MAST_RADIUS_L * 1.7, MAST_RADIUS_L * 1.7, MAST_HEIGHT_L * 1.02, 6)
       const outlineMaterial = new MeshBasicMaterial({ color: MARKER_OUTLINE, side: BackSide, fog: false, toneMapped: false })
+      // Whole park: the Landscape mast scaled with the scene, and thin lines for the park boundary and the 10 km window.
+      const pk = PARK_MAST_SCALE * sc.k
+      const parkMastGeometry = new CylinderGeometry(MAST_RADIUS_L * pk, MAST_RADIUS_L * pk, MAST_HEIGHT_L * pk, 6)
+      const parkOutlineGeometry = new CylinderGeometry(MAST_RADIUS_L * pk * 1.7, MAST_RADIUS_L * pk * 1.7, MAST_HEIGHT_L * pk * 1.02, 6)
+      const lineMaterial = (color: string) =>
+        new LineBasicMaterial({ color, transparent: true, opacity: 1, fog: false, toneMapped: false })
+      const boundaryMaterial = lineMaterial(PARK_LINE_COLORS.landscape.boundary)
+      // The window outline is a ribbon (a GL line is always 1 px), a little see-through so it stays quiet.
+      const windowMaterial = new MeshBasicMaterial({
+        color: PARK_LINE_COLORS.landscape.window,
+        transparent: true,
+        opacity: 0.9,
+        side: DoubleSide,
+        depthWrite: false,
+        fog: false,
+        toneMapped: false,
+      })
+      let parkLines: (LineSegments | Mesh)[] = []
+      let parkLinesFor: ParkData | null = null
+      const clearParkLines = () => {
+        for (const l of parkLines) {
+          scene.remove(l)
+          l.geometry.dispose()
+        }
+        parkLines = []
+        parkLinesFor = null
+      }
       const markers = new Group()
       scene.add(markers)
       let markerLabels: { material: SpriteMaterial; texture: CanvasTexture }[] = []
       let drape: CanvasTexture | null = null
 
-      const halfLabel = LABEL_SIZE_N * 0.5
+      const halfLabel = sc.northLabelSize * 0.5
       const labelCorners = [-1, 1].flatMap((sx) =>
         [-1, 1].map((sy) => label.position.clone().add(new Vector3(sx * halfLabel, sy * halfLabel, 0))),
       )
       // The wall's bottom corners count for framing too, so the block is not cut off by the view.
-      const baseY = (meta.min_m - SKIRT_DEPTH_M) * VERTICAL_EXAGGERATION
+      const baseY = wallBaseY
       const fitPoints = [...labelCorners]
       for (const sx of [-1, 1]) {
         for (const sz of [-1, 1]) {
@@ -775,6 +865,7 @@ export default function Terrain3D({
           Math.max(0.1, (right - left) / Math.max(w, 1)),
           Math.max(0.1, (bottom - top) / Math.max(h, 1)),
           startDistance,
+          sc,
         )
       }
       solveFits()
@@ -784,14 +875,14 @@ export default function Terrain3D({
         const f = fitAt(fits, azimuth)
         controls.target.set(0, f.targetY, 0)
         camera.position.set(
-          Math.sin(azimuth) * Math.cos(START_ELEVATION) * f.distance,
-          f.targetY + Math.sin(START_ELEVATION) * f.distance,
-          Math.cos(azimuth) * Math.cos(START_ELEVATION) * f.distance,
+          Math.sin(azimuth) * Math.cos(sc.startElevation) * f.distance,
+          f.targetY + Math.sin(sc.startElevation) * f.distance,
+          Math.cos(azimuth) * Math.cos(sc.startElevation) * f.distance,
         )
         return f
       }
 
-      const camera = new PerspectiveCamera(FOV, 1, 200, 120000)
+      const camera = new PerspectiveCamera(FOV, 1, sc.near, sc.far)
       const render = () => {
         if (alive) renderer.render(scene, camera)
       }
@@ -805,17 +896,32 @@ export default function Terrain3D({
         markerLabels = []
       }
 
-      const apply: Update = (p) => {
-        canvas.setAttribute('aria-label', ariaLabel(p.layer, p.method))
+      const apply: Update = (props) => {
+        // Park: the ground is Landscape until the park data has arrived; the window never has a park layer.
+        const parkMode = !sc.markers
+        const pd = parkMode ? props.parkData ?? null : null
+        const pLayer: ParkLayer = pd ? props.parkLayer ?? 'landscape' : 'landscape'
+        const placement = pd ? parkPlacement(pd, props.parkK ?? 20, props.parkRule ?? 'fire_history') : null
+        const p = props
+        canvas.setAttribute(
+          'aria-label',
+          parkMode ? parkAriaLabel(pLayer, props.parkK ?? 20, props.parkRule ?? 'fire_history') : ariaLabel(p.layer, p.method),
+        )
 
-        setLook(p.layer === 'landscape')
-        if (p.layer === 'landscape') {
+        let dataCanvas: HTMLCanvasElement | null = null
+        if (parkMode) {
+          if (pd && placement && pLayer !== 'landscape') dataCanvas = drawParkDrape(pd, pLayer, placement)
+        } else if (p.layer !== 'landscape') {
+          dataCanvas = drawDrape(p.results, p.layer, p.method)
+        }
+        setLook(dataCanvas === null)
+        if (!dataCanvas) {
           // The data drape is not needed here; free it and let the next data layer rebuild it.
           material.map = null
           drape?.dispose()
           drape = null
         } else {
-          const texture = new CanvasTexture(drawDrape(p.results, p.layer, p.method))
+          const texture = new CanvasTexture(dataCanvas)
           texture.colorSpace = SRGBColorSpace
           texture.generateMipmaps = true
           texture.minFilter = LinearMipmapLinearFilter
@@ -829,13 +935,59 @@ export default function Terrain3D({
         }
 
         clearMarkers()
+        if (parkMode) {
+          if (pd && placement) {
+            // The boundary and window follow the ground; built once per data set, recoloured per layer.
+            if (parkLinesFor !== pd) {
+              clearParkLines()
+              const lift = PARK_LINE_LIFT * sc.k
+              const mk = (positions: Float32Array, material: LineBasicMaterial | MeshBasicMaterial) => {
+                const g = new BufferGeometry()
+                g.setAttribute('position', new BufferAttribute(positions, 3))
+                const l = material instanceof LineBasicMaterial ? new LineSegments(g, material) : new Mesh(g, material)
+                l.renderOrder = 1
+                l.raycast = () => {}
+                scene.add(l)
+                return l
+              }
+              parkLines = [
+                mk(parkBoundaryPositions(pd, heights, meta, rect, exag, lift), boundaryMaterial),
+                mk(parkWindowBand(pd, heights, meta, rect, exag, lift, PARK_WINDOW_BAND * sc.k), windowMaterial),
+              ]
+              parkLinesFor = pd
+            }
+            const colors = PARK_LINE_COLORS[pLayer === 'landscape' ? 'landscape' : 'data']
+            boundaryMaterial.color.set(colors.boundary)
+            windowMaterial.color.set(colors.window)
+            const headSize = HEAD_SIZE_L * pk
+            const mastH = MAST_HEIGHT_L * pk
+            for (const [row, col] of placement.sites) {
+              const { x, z } = cellCentreScene(row, col, pd.meta, rect)
+              const ground = sampleHeight(heights, meta, x, z) * exag
+              const mast = new Mesh(parkMastGeometry, mastMaterial)
+              mast.position.set(x, ground + mastH / 2, z)
+              const shell = new Mesh(parkOutlineGeometry, outlineMaterial)
+              shell.position.copy(mast.position)
+              const head = new Sprite(headMaterialL)
+              head.scale.setScalar(headSize)
+              head.position.set(x, ground + mastH, z)
+              markers.add(shell, mast, head)
+            }
+            // Counted from the scene itself, for checks.
+            canvas.dataset.masts = String(markers.children.filter((o) => o instanceof Mesh && o.geometry === parkMastGeometry).length)
+          } else {
+            clearParkLines()
+          }
+          render()
+          return
+        }
         const chosen = new Set(p.method.chosen)
         const isL = p.layer === 'landscape'
         const mastH = isL ? MAST_HEIGHT_L : MAST_HEIGHT
         const headSize = isL ? HEAD_SIZE_L : HEAD_SIZE
         for (const site of p.results.sites) {
           const { x, z } = cellCentreScene(site.row, site.col, p.results.grid, rect)
-          const ground = sampleHeight(heights, meta, x, z) * VERTICAL_EXAGGERATION
+          const ground = sampleHeight(heights, meta, x, z) * exag
           if (!chosen.has(site.id)) {
             const dotSize = isL ? DOT_SIZE_L : DOT_SIZE
             const dot = new Sprite(isL ? dotMaterialL : dotMaterial)
@@ -879,6 +1031,7 @@ export default function Terrain3D({
       update.current = apply
 
       const applyFire: FireUpdate = (p) => {
+        if (!sc.markers) return
         const list = p.detections ?? null
         if (list !== fireSource) {
           if (fire) {
@@ -910,7 +1063,7 @@ export default function Terrain3D({
       place(0)
       controls.enablePan = false // panning could slide the view under the ground plane
       controls.maxPolarAngle = MAX_POLAR // camera stays above the y = 0 plane (terrain is above 0)
-      controls.minDistance = 2500
+      controls.minDistance = sc.minDistance
       controls.maxDistance = Math.max(...fits.map((f) => f.distance)) * 1.8
       // Touch: one finger rotates, two fingers zoom and rotate. The canvas takes every touch
       // gesture (touch-action: none); browsers cancel the pointers mid-gesture otherwise. The page
@@ -1071,15 +1224,16 @@ export default function Terrain3D({
           .unproject(camera)
           .sub(origin)
           .normalize()
-        return rayTerrainHit(origin, dir, heights, meta, VERTICAL_EXAGGERATION)
+        return rayTerrainHit(origin, dir, heights, meta, exag, sc.rayStep)
       }
       let lastGroundPixel = -2
       const flushPickAt = (clientX: number, clientY: number) => {
         const hit = pickHit(clientX, clientY)
-        const grid = latest.current.results.grid
-        const cell = hit ? sceneToCell(hit.x, hit.z, grid, rect) : null
-        setHoverCell(cell ? cell.row * grid.cols + cell.col : null)
-        if (latest.current.layer !== 'landscape') return
+        const parkMode = !sc.markers
+        const grid = parkMode ? latest.current.parkData?.meta ?? null : latest.current.results.grid
+        const cell = hit && grid ? sceneToCell(hit.x, hit.z, grid, rect) : null
+        setHoverCell(!parkMode && cell && grid ? cell.row * grid.cols + cell.col : null)
+        if (!parkMode && latest.current.layer !== 'landscape') return
         if (!hit) {
           lastGroundPixel = -1
           setHoverGround(null)
@@ -1088,10 +1242,13 @@ export default function Terrain3D({
         // The class under the pointer comes from the fine (terrain-pixel) grid, not the 500 m cell.
         const px = pixelAt(meta, hit.x, hit.z)
         const pixel = px.row * meta.cols + px.col
-        if (pixel === lastGroundPixel) return
-        lastGroundPixel = pixel
+        const cellIndex = cell && grid ? cell.row * grid.cols + cell.col : null
+        // In the park a pixel can straddle two 500 m cells, so the cell is part of the key.
+        const key = pixel * 32768 + (cellIndex ?? 0) + 1
+        if (key === lastGroundPixel) return
+        lastGroundPixel = key
         setHoverGround({
-          cell: cell ? cell.row * grid.cols + cell.col : null,
+          cell: cellIndex,
           elevation: sampleHeight(heights, meta, hit.x, hit.z),
           landClass: land ? landClassName(land.classes[pixel]) : 'Land cover unavailable',
           treePct: land && land.classes[pixel] === 10 ? Math.round((land.tree[pixel] / 255) * 100) : null,
@@ -1209,6 +1366,11 @@ export default function Terrain3D({
         controls.removeEventListener('change', repick)
         controls.dispose()
         clearMarkers()
+        clearParkLines()
+        parkMastGeometry.dispose()
+        parkOutlineGeometry.dispose()
+        boundaryMaterial.dispose()
+        windowMaterial.dispose()
         fire?.dispose()
         drape?.dispose()
         dotTexture.dispose()
@@ -1245,7 +1407,7 @@ export default function Terrain3D({
       }
     }
 
-    Promise.all([loadTerrain(), loadLandcover()])
+    Promise.all([loadTerrain(scale), loadLandcover(scale)])
       .then(([terrainState, landState]) => build(terrainState, landState))
       .catch(() => {
         if (disposed) return
@@ -1264,7 +1426,7 @@ export default function Terrain3D({
       disposed = true
       cleanup?.()
     }
-  }, [])
+  }, [scale])
 
   return (
     <div className="stage-3d">
@@ -1319,12 +1481,29 @@ export default function Terrain3D({
           </div>
           <div className="stage-info">
             <div className="stage-chip glass">
-              {landscape || !info ? (
+              {park ? (
+                <>
+                  {parkGround === 'landscape' ? (
+                    <LandscapeLegend classes={landKey} park />
+                  ) : (
+                    <ParkLegend layer={parkGround} lo={parkRange[0]} hi={parkRange[1]} />
+                  )}
+                  <ParkKey layer={parkGround} />
+                </>
+              ) : landscape || !info ? (
                 <LandscapeLegend classes={landKey} fires={replayShown} />
               ) : (
                 <Legend info={info} lo={lo} hi={hi} fires={replayShown} />
               )}
-              {landscape ? (
+              {park ? (
+                <ParkReadout
+                  hover={hoverGround}
+                  park={parkData}
+                  layer={parkGround}
+                  placement={parkPlaced}
+                  covered={parkCovered}
+                />
+              ) : landscape ? (
                 <GroundReadout hover={hoverGround} results={results} />
               ) : (
                 <CellReadout
@@ -1350,7 +1529,7 @@ export default function Terrain3D({
               {aboutOpen && (
                 <div id="about-view" ref={aboutPanel} className="about-pop glass" role="group" aria-label="About this view">
                   <div className="about-legend">
-                    <OverlayKey landscape={landscape} />
+                    {park ? <ParkKey layer={parkGround} /> : <OverlayKey landscape={landscape} />}
                   </div>
                   <p className="terrain-hint">Drag to rotate, pinch to zoom. Use Results to move down the page.</p>
                   <p className="mouse-hint">
@@ -1358,10 +1537,18 @@ export default function Terrain3D({
                     zoom. Drag to rotate.
                   </p>
                   <p>
-                    Heights exaggerated {VERTICAL_EXAGGERATION}×. Elevation: Copernicus DEM GLO-30, 30 m.
+                    Heights exaggerated {SCALE_NOTE[scale].exaggeration}×. Elevation: Copernicus DEM GLO-30,{' '}
+                    {SCALE_NOTE[scale].demResolutionM} m.
                   </p>
                   <p>Sensor masts are not to scale.</p>
-                  {landscape && (
+                  {park && landscape && (
+                    <p>
+                      Ground colours come from ESA WorldCover 2021 land cover and Copernicus elevation. The shading,
+                      sky and sun are illustrative (not the real weather or time of day).
+                    </p>
+                  )}
+                  {park && parkData && <p>{parkData.meta.note}</p>}
+                  {landscape && !park && (
                     <p>
                       Ground colours come from ESA WorldCover 2021 land cover and Copernicus elevation. Trees
                       are placed where the data shows tree cover but are illustrative, as are the shading, sky
@@ -1369,14 +1556,20 @@ export default function Terrain3D({
                     </p>
                   )}
                   <p>
-                    {landscape
+                    {park
+                      ? landscape
+                        ? 'Hover or tap the ground for its row, column, elevation and land cover.'
+                        : 'Hover or tap a cell for its row, column, elevation and layer value.'
+                      : landscape
                       ? 'Hover or tap the ground for its row, column, elevation and land cover.'
                       : 'Shading shows the terrain\u2019s shape and slightly darkens slopes; hover or tap a cell for its exact value.'}
                   </p>
-                  <p>
-                    Coverage was computed on the {results.grid.cell_size_m} m grid. On this 30 m surface a covered
-                    cell can look hidden behind a ridge the coarse model does not see.
-                  </p>
+                  {!park && (
+                    <p>
+                      Coverage was computed on the {results.grid.cell_size_m} m grid. On this 30 m surface a covered
+                      cell can look hidden behind a ridge the coarse model does not see.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

@@ -4,6 +4,8 @@
  * row-major, row 0 = north, column 0 = west. Pixel (r, c) is terrain vertex (r, c).
  */
 
+import { SCALE_FILES, type Scale } from './scale'
+
 export interface LandcoverData {
   rows: number
   cols: number
@@ -84,12 +86,13 @@ export function matchesTerrain(data: LandcoverData, meta: { rows: number; cols: 
   return data.rows === meta.rows && data.cols === meta.cols
 }
 
-async function fetchLandcover(): Promise<LandcoverState> {
+async function fetchLandcover(scale: Scale): Promise<LandcoverState> {
   const base = import.meta.env.BASE_URL
+  const name = SCALE_FILES[scale].landcover
   try {
     const [metaRes, binRes] = await Promise.all([
-      fetch(`${base}landcover.json`),
-      fetch(`${base}landcover.bin`),
+      fetch(`${base}${name}.json`),
+      fetch(`${base}${name}.bin`),
     ])
     if (!metaRes.ok || !binRes.ok) return { status: 'error' }
     const meta = (await metaRes.json()) as { rows?: unknown; cols?: unknown }
@@ -114,13 +117,17 @@ async function fetchLandcover(): Promise<LandcoverState> {
   }
 }
 
-let cached: Promise<LandcoverState> | null = null
+const cached = new Map<Scale, Promise<LandcoverState>>()
 
-/** Fetches once per page load; never rejects. Errors are retried on the next call. */
-export function loadLandcover(): Promise<LandcoverState> {
-  cached ??= fetchLandcover().then((s) => {
-    if (s.status === 'error') cached = null
-    return s
-  })
-  return cached
+/** Fetches once per scale per page load; never rejects. Errors are retried on the next call. */
+export function loadLandcover(scale: Scale = 'window'): Promise<LandcoverState> {
+  let p = cached.get(scale)
+  if (!p) {
+    p = fetchLandcover(scale).then((s) => {
+      if (s.status === 'error') cached.delete(scale)
+      return s
+    })
+    cached.set(scale, p)
+  }
+  return p
 }

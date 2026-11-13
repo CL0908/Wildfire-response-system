@@ -1,4 +1,5 @@
 import type { Bounds } from '../types'
+import { SCALE_FILES, SCALE_NOTE, type Scale } from './scale'
 
 export interface TerrainMeta {
   rows: number
@@ -23,7 +24,7 @@ export type TerrainState =
   | { status: 'ready'; terrain: Terrain }
 
 /** Applied to Y only; the scene note under the 3D view must state the same number. */
-export const VERTICAL_EXAGGERATION = 2
+export const VERTICAL_EXAGGERATION = SCALE_NOTE.window.exaggeration
 
 const HINT = 'The 2D map is still available.'
 const DECIMETRES_PER_METRE = 10
@@ -273,14 +274,15 @@ export function rayTerrainHit(
   }
 }
 
-async function fetchTerrain(): Promise<TerrainState> {
+async function fetchTerrain(scale: Scale): Promise<TerrainState> {
   const base = import.meta.env.BASE_URL
+  const name = SCALE_FILES[scale].terrain
   let metaRes: Response
   let binRes: Response
   try {
     ;[metaRes, binRes] = await Promise.all([
-      fetch(`${base}terrain.json`),
-      fetch(`${base}terrain.bin`),
+      fetch(`${base}${name}.json`),
+      fetch(`${base}${name}.bin`),
     ])
   } catch {
     return { status: 'error', message: `Could not fetch the terrain files. ${HINT}` }
@@ -309,13 +311,17 @@ async function fetchTerrain(): Promise<TerrainState> {
   }
 }
 
-let cached: Promise<TerrainState> | null = null
+const cached = new Map<Scale, Promise<TerrainState>>()
 
-/** Fetches once per page load, so toggling 2D / 3D does not re-download; errors are retried. */
-export function loadTerrain(): Promise<TerrainState> {
-  cached ??= fetchTerrain().then((s) => {
-    if (s.status === 'error') cached = null
-    return s
-  })
-  return cached
+/** Fetches once per scale per page load, so toggling 2D / 3D does not re-download; errors are retried. */
+export function loadTerrain(scale: Scale = 'window'): Promise<TerrainState> {
+  let p = cached.get(scale)
+  if (!p) {
+    p = fetchTerrain(scale).then((s) => {
+      if (s.status === 'error') cached.delete(scale)
+      return s
+    })
+    cached.set(scale, p)
+  }
+  return p
 }

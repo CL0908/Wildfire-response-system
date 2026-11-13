@@ -87,7 +87,7 @@ const ELEV_HIGH_M = 900
 const SPARSE_TREE: [number, number, number] = [158, 170, 82] // grass showing between the trees
 const DRY: [number, number, number] = [140, 146, 78]
 
-const GROUND_SCALE = 2 // texels per terrain pixel along each axis
+const GROUND_SCALE = 2 // texels per terrain pixel along each axis (the window's value)
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16)
@@ -169,7 +169,14 @@ export interface GroundTextures {
  * class and tree fraction from `lc` (all forest when null), and elevation, slope, ridges and
  * hollows from the heights.
  */
-export function paintGround(heights: Float32Array, meta: TerrainMeta, lc: LandcoverData | null): GroundTextures {
+export function paintGround(
+  heights: Float32Array,
+  meta: TerrainMeta,
+  lc: LandcoverData | null,
+  groundScale = GROUND_SCALE,
+  /** Cast-shadow darkening per terrain pixel (0..1) from `bakeShadow`; none when omitted. */
+  shade: Float32Array | null = null,
+): GroundTextures {
   const { rows, cols } = meta
   const n = rows * cols
   const dx = meta.width_m / (cols - 1)
@@ -208,8 +215,8 @@ export function paintGround(heights: Float32Array, meta: TerrainMeta, lc: Landco
   const soft = weights.map((w, k) => (k === treeK && !lc ? w : smooth121(w, rows, cols)))
   const flat = LAND_CLASSES.map((c) => hexToRgb(c.color))
 
-  const W = cols * GROUND_SCALE
-  const H = rows * GROUND_SCALE
+  const W = cols * groundScale
+  const H = rows * groundScale
   const color = document.createElement('canvas')
   color.width = W
   color.height = H
@@ -225,12 +232,12 @@ export function paintGround(heights: Float32Array, meta: TerrainMeta, lc: Landco
   const col: [number, number, number] = [0, 0, 0]
   for (let ty = 0; ty < H; ty++) {
     // Texel centre in terrain-pixel coordinates (pixel centres at integers).
-    const gy = (ty + 0.5) / GROUND_SCALE - 0.5
+    const gy = (ty + 0.5) / groundScale - 0.5
     const gyc = Math.min(rows - 1, Math.max(0, gy))
     const r0 = Math.min(rows - 2, Math.floor(gyc))
     const fy = gyc - r0
     for (let tx = 0; tx < W; tx++) {
-      const gx = (tx + 0.5) / GROUND_SCALE - 0.5
+      const gx = (tx + 0.5) / groundScale - 0.5
       const gxc = Math.min(cols - 1, Math.max(0, gx))
       const c0 = Math.min(cols - 2, Math.floor(gxc))
       const fx = gxc - c0
@@ -283,7 +290,9 @@ export function paintGround(heights: Float32Array, meta: TerrainMeta, lc: Landco
       const fine = vnoise(gx * 1.1, gy * 1.1, 7) * 0.65 + vnoise(gx * 2.3, gy * 2.3, 19) * 0.35
       const patch = vnoise(gx * 0.2, gy * 0.2, 31) * 0.6 + vnoise(gx * 0.55, gy * 0.55, 43) * 0.4
       const lum =
-        (1 + (fine - 0.5) * 0.32 * calm + (patch - 0.5) * 0.26 * calm) * (1 - clamp01(-rg / 40) * 0.16)
+        (1 + (fine - 0.5) * 0.32 * calm + (patch - 0.5) * 0.26 * calm) *
+        (1 - clamp01(-rg / 40) * 0.16) *
+        (shade ? 1 - BAKED_SHADOW * bil(shade) : 1)
       const hue = (patch - 0.5) * 12 * calm
       const o = (ty * W + tx) * 4
       cImg.data[o] = Math.round(Math.min(255, Math.max(0, (col[0] + hue) * lum)))
@@ -300,6 +309,71 @@ export function paintGround(heights: Float32Array, meta: TerrainMeta, lc: Landco
   cctx.putImageData(cImg, 0, 0)
   rctx.putImageData(rImg, 0, 0)
   return { color, rough }
+}
+
+/** How much of the albedo a fully shadowed, sun-facing pixel loses in the baked shadows. */
+const BAKED_SHADOW = 0.55
+
+/**
+ * Cast shadows for the whole-park view, where a shadow map would be too coarse and too costly:
+ * for each terrain pixel, march towards the sun over the (exaggerated) height field and measure
+ * how far the ground rises above the ray, softened over about one pixel. Multiplied by how
+ * squarely the surface faces the sun, so slopes the light already misses are not darkened twice.
+ * Returns 0..1 per pixel, row-major like `heights`. One pass at load; nothing runs per frame.
+ */
+export function bakeShadow(heights: Float32Array, meta: TerrainMeta, exaggeration: number): Float32Array {
+  const { rows, cols } = meta
+  const dx = meta.width_m / (cols - 1)
+  const dz = meta.height_m / (rows - 1)
+  const sun = sunDirection()
+  const horiz = Math.hypot(sun.x, sun.z)
+  const tanElev = sun.y / horiz
+  // One step is a pixel long; in pixels it moves `sc` columns east and `sr` rows south.
+  const stepM = Math.min(dx, dz)
+  const sc = (sun.x / horiz) * (stepM / dx)
+  const sr = (sun.z / horiz) * (stepM / dz)
+  const rise = stepM * tanElev
+  let maxH = 0
+  for (let i = 0; i < heights.length; i++) maxH = Math.max(maxH, heights[i])
+  maxH *= exaggeration
+  const out = new Float32Array(rows * cols)
+  const at = (r: number, c: number) => heights[r * cols + c]
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const h0 = at(r, c) * exaggeration
+      let excess = -Infinity
+      for (let s = 1; ; s++) {
+        const rayH = h0 + s * rise
+        if (rayH > maxH) break
+        const fc = c + s * sc
+        const fr = r + s * sr
+        if (fc < 0 || fr < 0 || fc > cols - 1 || fr > rows - 1) break
+        const c0 = Math.min(cols - 2, Math.floor(fc))
+        const r0 = Math.min(rows - 2, Math.floor(fr))
+        const tc = fc - c0
+        const tr = fr - r0
+        const h =
+          (at(r0, c0) * (1 - tc) * (1 - tr) +
+            at(r0, c0 + 1) * tc * (1 - tr) +
+            at(r0 + 1, c0) * (1 - tc) * tr +
+            at(r0 + 1, c0 + 1) * tc * tr) *
+          exaggeration
+        excess = Math.max(excess, h - rayH)
+      }
+      const occ = clamp01(excess / rise + 0.5)
+      // Surface normal from central differences of the exaggerated heights.
+      const c0 = Math.max(0, c - 1)
+      const c1 = Math.min(cols - 1, c + 1)
+      const r0 = Math.max(0, r - 1)
+      const r1 = Math.min(rows - 1, r + 1)
+      const gx = ((at(r, c1) - at(r, c0)) * exaggeration) / ((c1 - c0) * dx)
+      const gz = ((at(r1, c) - at(r0, c)) * exaggeration) / ((r1 - r0) * dz)
+      const inv = 1 / Math.hypot(gx, 1, gz)
+      const facing = clamp01((-gx * sun.x + sun.y - gz * sun.z) * inv)
+      out[r * cols + c] = occ * Math.min(1, facing * 1.5)
+    }
+  }
+  return out
 }
 
 /** Ground textures as three textures; `channel` 1 expects the `uv1` attribute from `groundUVs`. */
@@ -379,11 +453,11 @@ export function strataTexture(maxAnisotropy: number): CanvasTexture {
 }
 
 /** Adds normals and strata UVs to the wall geometry: u along the wall, v = height above `baseY`. */
-export function addSkirtStrataUVs(g: BufferGeometry, baseY: number, topY: number): void {
+export function addSkirtStrataUVs(g: BufferGeometry, baseY: number, topY: number, repeatM = 10000): void {
   const pos = g.getAttribute('position')
   const uv = new Float32Array(pos.count * 2)
   for (let i = 0; i < pos.count; i++) {
-    uv[i * 2] = (pos.getX(i) + pos.getZ(i)) / 10000
+    uv[i * 2] = (pos.getX(i) + pos.getZ(i)) / repeatM
     uv[i * 2 + 1] = (pos.getY(i) - baseY) / (topY - baseY)
   }
   g.setAttribute('uv', new BufferAttribute(uv, 2))

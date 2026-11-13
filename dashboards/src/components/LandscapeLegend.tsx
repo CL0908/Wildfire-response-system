@@ -5,10 +5,12 @@ interface Props {
   classes: LandClass[] | 'none'
   /** Add the fire replay's keys while the replay is shown. */
   fires?: boolean
+  /** The whole-park view has no sensors or trees. */
+  park?: boolean
 }
 
 /** Legend for the Landscape layer: land-cover swatches, then the same site keys as the data layers. */
-export default function LandscapeLegend({ classes, fires = false }: Props) {
+export default function LandscapeLegend({ classes, fires = false, park = false }: Props) {
   return (
     <div className="legends">
       <ul className="land-key" aria-label="Land cover">
@@ -23,6 +25,7 @@ export default function LandscapeLegend({ classes, fires = false }: Props) {
           ))
         )}
       </ul>
+      {!park && (
       <ul className="key" aria-label="Overlay key">
         <li>
           <svg width="16" height="16" aria-hidden="true">
@@ -61,7 +64,12 @@ export default function LandscapeLegend({ classes, fires = false }: Props) {
           </>
         )}
       </ul>
-      <p className="land-note">Land cover and elevation are real. Trees, sun and sky are illustrative.</p>
+      )}
+      <p className="land-note">
+        {park
+          ? 'Land cover and elevation are real. Sun and sky are illustrative.'
+          : 'Land cover and elevation are real. Trees, sun and sky are illustrative.'}
+      </p>
       {fires && <p className="land-note">Detections are real; their glow and fade are illustrative.</p>}
     </div>
   )

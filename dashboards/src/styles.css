@@ -1274,6 +1274,31 @@ td.has-std {
   min-height: 0;
 }
 
+/* Whole-park map: 187:131, wider than tall, so the panel is sized from the stage height by that ratio. */
+.park-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.park-keys {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+/* Two lines reserved, so hovering does not resize the panel and shift the map under the pointer. */
+.panel-2d.panel-park .readout {
+  min-height: 4.6em;
+}
+
+.panel-2d.panel-park {
+  width: min(100%, calc((var(--stage-h) - var(--top-2d) - 64px - 2 * var(--panel-pad) - 210px) * 1.4275 + 2 * var(--panel-pad)));
+}
+
 .panel-2d .muted {
   color: var(--muted);
 }
@@ -1295,9 +1320,17 @@ td.has-std {
     row-gap: 12px;
     align-items: start;
   }
-  .panel-2d .map-svg {
+  .panel-2d .map-svg,
+  .panel-2d .park-canvas {
     grid-row: 1 / span 2;
     grid-column: 1;
+  }
+  .panel-2d.panel-park {
+    width: min(100%, calc((var(--stage-h) - var(--top-2d) - 64px - 2 * var(--panel-pad)) * 1.4275 + 2 * var(--panel-pad) + 276px));
+  }
+  .panel-2d .park-keys {
+    grid-column: 2;
+    grid-row: 2;
   }
   .panel-2d .readout {
     grid-column: 2;
@@ -1689,4 +1722,87 @@ td.has-std {
   .fire-timeline {
     right: 72px;
   }
+}
+
+/* Whole-park view */
+.swatch {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line);
+}
+
+.stats.stats-park,
+.stage-card .stats.stats-park {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 8px;
+}
+
+/* Whole-park sections */
+:root {
+  --s-park-area: #0f766e;
+  --s-park-fire: #6d28d9;
+}
+
+.share-bar {
+  display: flex;
+  height: 12px;
+  gap: 2px;
+}
+
+.share-bar > span {
+  min-width: 2px;
+}
+
+.share-0 {
+  background: var(--c-ink);
+}
+
+.share-1 {
+  background: var(--s-baseline);
+}
+
+.share-2 {
+  background: var(--c-hair);
+}
+
+.park-table td.num,
+.park-table th.num {
+  text-align: right;
+}
+
+.park-table tr.is-selected > * {
+  background: #eef2f7;
+  font-weight: 650;
+}
+
+.row-pick {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--c-hair);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.row-pick:hover {
+  text-decoration-color: currentColor;
+}
+
+.row-pick:focus-visible {
+  outline: 2px solid var(--c-ink);
+  outline-offset: 2px;
+}
+
+.limits {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 64ch;
+  padding-left: 20px;
+  font-size: 15px;
 }
