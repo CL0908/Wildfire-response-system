@@ -90,3 +90,40 @@ export function ParkKey({ layer }: { layer: ParkLayer }) {
     </ul>
   )
 }
+
+/** The fire replay's keys in the whole-park view: the window's two marks, and the dimmer ones outside the park. */
+export function ParkFireKey() {
+  return (
+    <>
+      <ul className="key" aria-label="Fire replay key">
+        <li>
+          <svg width="16" height="16" aria-hidden="true">
+            <defs>
+              <radialGradient id="park-fire-key-ember">
+                <stop offset="0" stopColor="#fff5b8" />
+                <stop offset="0.45" stopColor="#ffa01a" />
+                <stop offset="0.8" stopColor="#ff4a0e" />
+                <stop offset="1" stopColor="#ff4a0e" stopOpacity="0" />
+              </radialGradient>
+            </defs>
+            <circle cx="8" cy="8" r="7.5" fill="url(#park-fire-key-ember)" />
+          </svg>
+          Active detection
+        </li>
+        <li>
+          <svg width="16" height="16" aria-hidden="true">
+            <circle cx="8" cy="8" r="4" fill="#211812" stroke="#94491f" strokeWidth="1.2" />
+          </svg>
+          Earlier detection
+        </li>
+        <li>
+          <svg width="16" height="16" aria-hidden="true">
+            <circle cx="8" cy="8" r="4" fill="#211812" stroke="#94491f" strokeWidth="1.2" opacity="0.4" />
+          </svg>
+          Outside the park, dimmer
+        </li>
+      </ul>
+      <p className="land-note">Detections are real; their glow and fade are illustrative.</p>
+    </>
+  )
+}

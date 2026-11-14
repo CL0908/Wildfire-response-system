@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Keyb
 import { formatDateLong, formatInt } from '../lib/format'
 import type { Replay } from '../lib/fireReplay'
 import { useMediaQuery } from '../lib/useMediaQuery'
+import type { ParkRule } from '../lib/park'
 
 /** Seconds between monthly steps when the person prefers reduced motion. */
 const STEP_SECONDS = 0.7
@@ -83,10 +84,12 @@ interface Props {
   /** Flat cell indices covered by the selected method; null when the cells do not match the fire grid. */
   coveredCells: ReadonlySet<number> | null
   methodName: string
+  /** Set in the whole-park view: the counts then show the detections inside the park and the sensors' view. */
+  parkRule?: ParkRule
 }
 
 /** Play bar for the fire replay: play and pause, scrubber over a monthly histogram, date and counts. */
-export default function FireTimeline({ replay, t, playing, onTime, onPlaying, onClose, coveredCells, methodName }: Props) {
+export default function FireTimeline({ replay, t, playing, onTime, onPlaying, onClose, coveredCells, methodName, parkRule }: Props) {
   const { duration } = replay
   const reduced = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [speed, setSpeed] = useState<number>(1)
@@ -163,7 +166,7 @@ export default function FireTimeline({ replay, t, playing, onTime, onPlaying, on
     return () => observer.disconnect()
   }, [])
 
-  const { count, covered } = replay.countsAt(t, coveredCells)
+  const { count, covered, inside } = replay.countsAt(t, coveredCells)
   const date = replay.dateAt(t)
   const longDate = formatDateLong(isoOf(date))
   const monthYear = longDate.split(' ').slice(1).join(' ')
@@ -295,9 +298,15 @@ export default function FireTimeline({ replay, t, playing, onTime, onPlaying, on
           <span>
             {formatInt(count)} of {formatInt(replay.total)} detections
           </span>
+          {parkRule && <span>{formatInt(inside)} inside the park</span>}
           {covered !== null && (
             <span>
-              {formatInt(covered)} inside cells covered by {methodName}
+              {parkRule
+                ? `${formatInt(covered)} in view of the sensors, margin included`
+                : `${formatInt(covered)} inside cells covered by ${methodName}`}
+              {parkRule && parkRule !== 'coverage' && (
+                <span className="ft-caveat"> (placed from these detections, so not an independent test)</span>
+              )}
             </span>
           )}
         </div>

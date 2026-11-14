@@ -28,6 +28,9 @@ import { LANDSCAPE, availableLayers, type StageLayer } from './lib/layers'
 import { loadFires, type FiresState } from './lib/fires'
 import { createReplay } from './lib/fireReplay'
 
+// The whole-park replay runs longer than the window's 52 s: it has 16,365 detections over 14 years.
+const PARK_REPLAY_SECONDS = 90
+
 type Terrain3DProps = Parameters<typeof Terrain3DView>[0]
 
 function ChunkFailed({ onUnavailable }: Pick<Terrain3DProps, 'onUnavailable'>) {
@@ -71,6 +74,9 @@ const ResultSections = memo(function ResultSections({
   )
 })
 
+// Memoised for the same reason as ResultSections.
+const MemoParkSections = memo(ParkSections)
+
 function Dashboard({ results }: { results: Results }) {
   const [layer, setLayer] = useState<StageLayer>('landscape')
   const [view, setView] = useState<ViewMode>('3d')
@@ -86,22 +92,28 @@ function Dashboard({ results }: { results: Results }) {
   const [picked, setPicked] = useState(false)
   // Fire replay: on or off, playback time in seconds (0 to replay.duration) and whether it is running.
   // The replay is 3D only, so leaving 3D switches it off.
-  const [fireState, setFireState] = useState<FiresState | null>(null)
+  const [windowFires, setWindowFires] = useState<FiresState | null>(null)
+  // The whole-park detections are fetched when the park is first shown in 3D.
+  const [parkFires, setParkFires] = useState<FiresState | null>(null)
   const [replayOn, setReplayOn] = useState(false)
   const [replayT, setReplayT] = useState(0)
   const [replayPlaying, setReplayPlaying] = useState(false)
   useEffect(() => {
     let live = true
     void loadFires().then((s) => {
-      if (live) setFireState(s)
+      if (live) setWindowFires(s)
     })
     return () => {
       live = false
     }
   }, [])
-  const replay = useMemo(
-    () => (fireState?.status === 'ready' ? createReplay(fireState.fires.detections) : null),
-    [fireState],
+  const windowReplay = useMemo(
+    () => (windowFires?.status === 'ready' ? createReplay(windowFires.fires.detections) : null),
+    [windowFires],
+  )
+  const parkReplay = useMemo(
+    () => (parkFires?.status === 'ready' ? createReplay(parkFires.fires.detections, PARK_REPLAY_SECONDS) : null),
+    [parkFires],
   )
   const setReplay = useCallback((on: boolean) => {
     setReplayOn(on)
@@ -124,9 +136,22 @@ function Dashboard({ results }: { results: Results }) {
     setPicked(true)
     setFellBack(false)
     setScale(next)
-    if (next === 'park') setReplay(false)
+    // Each scale has its own replay, so playback time does not carry over.
+    if (next !== scale) setReplay(false)
   }
   const park = scale === 'park'
+  useEffect(() => {
+    if (!park || view !== '3d') return
+    let live = true
+    void loadFires('park').then((s) => {
+      if (live) setParkFires(s)
+    })
+    return () => {
+      live = false
+    }
+  }, [park, view])
+  const fireState = park ? parkFires : windowFires
+  const replay = park ? parkReplay : windowReplay
   useEffect(() => {
     if (scale !== 'park') return
     let live = true
@@ -138,6 +163,10 @@ function Dashboard({ results }: { results: Results }) {
     }
   }, [scale])
   const parkData = parkState.status === 'ready' ? parkState.park : null
+  const selectPark = useCallback((k: ParkK, rule: ParkRule) => {
+    setParkK(k)
+    setParkRule(rule)
+  }, [])
   const parkMetrics = parkData ? parkPlacement(parkData, parkK, parkRule).metrics : null
   // Until the park data arrives the ground stays Landscape.
   const parkGround: ParkLayer = parkData ? parkLayer : 'landscape'
@@ -149,12 +178,14 @@ function Dashboard({ results }: { results: Results }) {
   const { grid } = results
   const hardware = useHardware()
   const layerInfos = availableLayers(results.layers)
-  const replayShown = replayOn && view === '3d' && replay !== null && !park
-  const sameGrid =
-    fireState?.status === 'ready' &&
-    fireState.fires.grid.rows === grid.rows &&
-    fireState.fires.grid.cols === grid.cols
-  const coveredCells = useMemo(() => (sameGrid ? new Set(method.covered_cells) : null), [sameGrid, method])
+  const replayShown = replayOn && view === '3d' && replay !== null
+  // The cells the chosen sensors see, when they sit on the same grid as the detections.
+  const fireGrid = fireState?.status === 'ready' ? fireState.fires.grid : null
+  const sensorGrid = park ? parkData?.meta : grid
+  const sameGrid = !!fireGrid && !!sensorGrid && fireGrid.rows === sensorGrid.rows && fireGrid.cols === sensorGrid.cols
+  const coveredList = !sameGrid ? null : park && parkData ? parkPlacement(parkData, parkK, parkRule).covered : method.covered_cells
+  // A new set only when the placement changes, so the replay keeps playing through a change.
+  const coveredCells = useMemo(() => (coveredList ? new Set(coveredList) : null), [coveredList])
   const replayReason =
     view === '2d'
       ? 'Needs the 3D view.'
@@ -240,14 +271,12 @@ function Dashboard({ results }: { results: Results }) {
               <LayerSwitch layers={[LANDSCAPE, ...layerInfos]} value={layer} onChange={setLayer} />
             )}
           </div>
-          {!park && (
-            <ReplaySwitch
-              on={replayShown}
-              disabled={view === '2d' || replay === null}
-              reason={replayReason}
-              onChange={setReplay}
-            />
-          )}
+          <ReplaySwitch
+            on={replayShown}
+            disabled={view === '2d' || replay === null}
+            reason={replayReason}
+            onChange={setReplay}
+          />
           {park ? (
             <>
               <ParkControls k={parkK} rule={parkRule} onK={setParkK} onRule={setParkRule} />
@@ -308,7 +337,7 @@ function Dashboard({ results }: { results: Results }) {
               replay={replay}
               replayT={replayT}
               replayPlaying={replayPlaying}
-              detections={!park && fireState?.status === 'ready' ? fireState.fires.detections : null}
+              detections={fireState?.status === 'ready' ? fireState.fires.detections : null}
               onUnavailable={!picked ? fallBackTo2D : undefined}
             />
           </Suspense>
@@ -328,6 +357,7 @@ function Dashboard({ results }: { results: Results }) {
             onClose={closeReplayFromBar}
             coveredCells={coveredCells}
             methodName={method.name}
+            parkRule={park ? parkRule : undefined}
           />
         )}
         <a className="results-link glass" href="#results">
@@ -335,15 +365,7 @@ function Dashboard({ results }: { results: Results }) {
         </a>
       </section>
       {park ? (
-        <ParkSections
-          state={parkState}
-          k={parkK}
-          rule={parkRule}
-          onSelect={(k, rule) => {
-            setParkK(k)
-            setParkRule(rule)
-          }}
-        />
+        <MemoParkSections state={parkState} k={parkK} rule={parkRule} onSelect={selectPark} />
       ) : (
         <ResultSections results={results} method={method} hardware={hardware} />
       )}

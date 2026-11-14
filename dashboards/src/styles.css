@@ -1656,6 +1656,11 @@ td.has-std {
   font-variant-numeric: tabular-nums;
 }
 
+.ft-caveat {
+  font-size: 0.75rem;
+  color: var(--on-dark-muted);
+}
+
 .ft-note {
   grid-area: note;
   font-size: 0.75rem;
@@ -1721,6 +1726,12 @@ td.has-std {
 @media (max-width: 719px) {
   .fire-timeline {
     right: 72px;
+  }
+  /* The bar and the legend together would cover the map on a phone; the hover readout stays. */
+  .has-replay .stage-chip > .legends,
+  .has-replay .stage-chip > .key,
+  .has-replay .stage-chip > .land-note {
+    display: none;
   }
 }
 

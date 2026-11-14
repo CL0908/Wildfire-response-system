@@ -17,6 +17,22 @@ export const SCALE_NOTE: Record<Scale, { exaggeration: number; demResolutionM: n
 /** Width the window's constants were tuned for; a scene's extent factor is its width over this. */
 const REFERENCE_WIDTH_M = 10000
 
+/** The fire replay's marks: lengths in scene metres and sizes in CSS px (see lib/fireMarks.ts). */
+export interface FireScale {
+  /** Height of a mark above the ground (which is already exaggerated), over Landscape and over the data layers. */
+  liftLandscape: number
+  liftData: number
+  /** Scene metres an ember is wide at a size factor of 1. */
+  worldSize: number
+  /** The marks are pulled this far towards the camera so a slope in front does not clip them. */
+  pull: number
+  /** Ember width in px at a size factor of 1, never below or above these. */
+  minPx: number
+  maxPx: number
+  /** Smallest scorch mark in px. */
+  minScorchPx: number
+}
+
 /**
  * Every value in the 3D scene that was written as a fixed number of metres, per scale. For the
  * window each value is exactly the one the scene always used (the extent factor `k` is 1); for the
@@ -46,11 +62,12 @@ export interface SceneScale {
   strataRepeat: number
   /** Resolution of the elevation data, shown in the About note. */
   demResolutionM: number
-  /** Individual trees, the sensor markers and the fire replay exist only in the window. */
+  /** Individual trees and the sensor markers exist only in the window. */
   trees: boolean
   markers: boolean
   /** A real-time shadow map (window) or cast shadows baked into the ground texture (park). */
   shadowMap: boolean
+  fire: FireScale
 }
 
 export function sceneScale(scale: Scale, widthM: number): SceneScale {
@@ -74,6 +91,7 @@ export function sceneScale(scale: Scale, widthM: number): SceneScale {
       trees: true,
       markers: true,
       shadowMap: true,
+      fire: { liftLandscape: 200, liftData: 45, worldSize: 150, pull: 220, minPx: 9, maxPx: 22, minScorchPx: 4.5 },
     }
   }
   const k = widthM / REFERENCE_WIDTH_M
@@ -96,5 +114,18 @@ export function sceneScale(scale: Scale, widthM: number): SceneScale {
     trees: false,
     markers: false,
     shadowMap: false,
+    // Metres follow the scene's width. The park is seen from about k times as far, so the same
+    // metres would fall below a pixel; the px clamps are smaller than the window's so 16,000
+    // detections do not merge into one mass.
+    fire: {
+      // No trees to clear in the park, so Landscape lifts the marks no higher than the data layers do.
+      liftLandscape: 45 * k,
+      liftData: 45 * k,
+      worldSize: 150 * k,
+      pull: 220 * k,
+      minPx: 5,
+      maxPx: 12,
+      minScorchPx: 2,
+    },
   }
 }

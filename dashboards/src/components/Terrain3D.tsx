@@ -35,7 +35,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import CellReadout from './CellReadout'
 import Legend from './Legend'
 import LandscapeLegend from './LandscapeLegend'
-import { ParkKey, ParkLegend } from './ParkLegend'
+import { ParkFireKey, ParkKey, ParkLegend } from './ParkLegend'
 import ParkReadout, { type ParkHover } from './ParkReadout'
 import { drawDrape, drawParkDrape, parkLayerRange } from '../lib/drape'
 import { buildFireMarks, type FireMarks } from '../lib/fireMarks'
@@ -1031,7 +1031,6 @@ export default function Terrain3D({
       update.current = apply
 
       const applyFire: FireUpdate = (p) => {
-        if (!sc.markers) return
         const list = p.detections ?? null
         if (list !== fireSource) {
           if (fire) {
@@ -1041,7 +1040,9 @@ export default function Terrain3D({
           }
           fireSource = list
           if (list && list.length > 0) {
-            fire = buildFireMarks(list, heights, meta, latest.current.results.grid, rect)
+            // The park's cell-centre fallback (no mesh bounds) needs the park grid, not the window's.
+            const fireGrid = sc.markers ? latest.current.results.grid : (latest.current.parkData?.meta ?? latest.current.results.grid)
+            fire = buildFireMarks(list, heights, meta, fireGrid, rect, exag, sc.fire)
             fire.setLandscape(lookIsLandscape)
             fire.points.visible = false
             scene.add(fire.points)
@@ -1489,6 +1490,7 @@ export default function Terrain3D({
                     <ParkLegend layer={parkGround} lo={parkRange[0]} hi={parkRange[1]} />
                   )}
                   <ParkKey layer={parkGround} />
+                  {replayShown && <ParkFireKey />}
                 </>
               ) : landscape || !info ? (
                 <LandscapeLegend classes={landKey} fires={replayShown} />

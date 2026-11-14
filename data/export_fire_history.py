@@ -6,11 +6,17 @@ yearly VIIRS S-NPP Thailand CSVs from the raw cache (QP_DATA_CACHE, default
 ../data_cache/firms next to the repo), keeps detections strictly inside the bounds and
 writes dashboards/public/fires.json.
 
+With --park, the same export runs on the whole-park grid: bounds from
+data/park_500m_meta.json (`bounds_deg`), grid shape from its `grid_shape`, output
+dashboards/public/fires_park.json. Each detection gets one extra field, `inside`, which is
+1 when its cell has inside_park > 0.5 in data/park_500m.npz, else 0.
+
 Row filter (same as load_fires in data/fetch_khao_yai.py): confidence in {n, h} and
 type == 0 when the year's file has a usable type column; otherwise all n/h rows.
 
-Usage: python data/export_fire_history.py
+Usage: python data/export_fire_history.py [--park]
 """
+import argparse
 import csv
 import json
 import math
@@ -24,6 +30,13 @@ CACHE = Path(os.environ.get("QP_DATA_CACHE", HERE.parent.parent / "data_cache"))
 YEARS = range(2012, 2026)
 SOURCE = "NASA FIRMS VIIRS 375 m active fire detections"
 NOTE = "Each entry is a satellite detection of a hot spot, located to about 375 m. Not a fire perimeter."
+PARK_SOURCE = SOURCE + ", binned to the whole-park grid"
+PARK_NOTE = (NOTE + " Grid: the whole of Khao Yai National Park as 131 x 187 cells of 500 m, "
+             "the park plus a 5 km margin on every side. inside is 1 when more than half of the "
+             "cell's sample points lie inside the park polygon, else 0.")
+PARK_META = HERE / "park_500m_meta.json"
+PARK_NPZ = HERE / "park_500m.npz"
+FIELDS = ["date", "lon", "lat", "frp", "row", "col", "night"]
 
 
 def cell_of(lat, lon, bounds, rows, cols):
@@ -61,11 +74,8 @@ def read_year(path, bounds):
     return [r for r in rows if keep_row(r["confidence"], r.get("type", "") or "", type_usable)]
 
 
-def main():
-    res = json.loads((PUBLIC / "results.json").read_text())
-    bounds = res["bounds"]
-    rows_n, cols_n = res["grid"]["rows"], res["grid"]["cols"]
-
+def collect_records(bounds, rows_n, cols_n):
+    """Kept, de-duplicated detections across all years, each with its grid row and col."""
     seen = set()
     records = []
     for y in YEARS:
@@ -86,19 +96,50 @@ def main():
                 "lat": round(lat, 5), "frp": round(float(r["frp"]), 1),
                 "row": rc[0], "col": rc[1], "night": 1 if r["daynight"].strip() == "N" else 0,
             })
-
     records.sort(key=lambda d: (d["date"], d["time"], d["lon"], d["lat"]))
-    detections = [[d["date"], d["lon"], d["lat"], d["frp"], d["row"], d["col"], d["night"]]
-                  for d in records]
+    return records
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--park", action="store_true",
+                        help="export the whole-park grid to dashboards/public/fires_park.json")
+    args = parser.parse_args()
+
+    if args.park:
+        meta = json.loads(PARK_META.read_text())
+        bounds = meta["bounds_deg"]
+        rows_n, cols_n = meta["grid_shape"]
+        import numpy as np
+        inside = np.load(PARK_NPZ)["inside_park"] > 0.5
+        fields = FIELDS + ["inside"]
+        source, note = PARK_SOURCE, PARK_NOTE
+        out_name = "fires_park.json"
+    else:
+        res = json.loads((PUBLIC / "results.json").read_text())
+        bounds = res["bounds"]
+        rows_n, cols_n = res["grid"]["rows"], res["grid"]["cols"]
+        inside = None
+        fields = FIELDS
+        source, note = SOURCE, NOTE
+        out_name = "fires.json"
+
+    records = collect_records(bounds, rows_n, cols_n)
+    detections = []
+    for d in records:
+        row = [d["date"], d["lon"], d["lat"], d["frp"], d["row"], d["col"], d["night"]]
+        if inside is not None:
+            row.append(int(inside[d["row"], d["col"]]))
+        detections.append(row)
     out = {
-        "source": SOURCE,
-        "note": NOTE,
+        "source": source,
+        "note": note,
         "bounds": bounds,
         "grid": {"rows": rows_n, "cols": cols_n},
         "first_date": detections[0][0] if detections else None,
         "last_date": detections[-1][0] if detections else None,
         "count": len(detections),
-        "fields": ["date", "lon", "lat", "frp", "row", "col", "night"],
+        "fields": fields,
         "detections": detections,
     }
     body = json.dumps({k: v for k, v in out.items() if k != "detections"}, indent=1)
@@ -106,9 +147,9 @@ def main():
     det = ",\n".join("  " + json.dumps(d, separators=(",", ":")) for d in detections)
     text = f"{head},\n  \"detections\": [\n{det}\n  ]\n}}\n"
     PUBLIC.mkdir(parents=True, exist_ok=True)
-    (PUBLIC / "fires.json").write_text(text)
+    (PUBLIC / out_name).write_text(text)
     print(f"detections {len(detections)}  first {out['first_date']}  last {out['last_date']}  "
-          f"fires.json {len(text.encode())} bytes")
+          f"{out_name} {len(text.encode())} bytes")
 
 
 if __name__ == "__main__":

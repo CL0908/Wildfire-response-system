@@ -1,8 +1,9 @@
 import { BufferAttribute, BufferGeometry, Points, ShaderMaterial, Vector2 } from 'three'
 import type { Detection } from './fires'
 import { PHASE_BURNING, PHASE_SCORCH } from './fireReplay'
-import { VERTICAL_EXAGGERATION, cellCentreScene, latLonToScene, sampleHeight } from './terrain'
+import { cellCentreScene, latLonToScene, sampleHeight } from './terrain'
 import type { SceneRect, TerrainMeta } from './terrain'
+import type { FireScale } from './scale'
 
 /**
  * The replay's detections as one draw call: a burning one is a glowing ember that fades over
@@ -11,22 +12,18 @@ import type { SceneRect, TerrainMeta } from './terrain'
  * do not get tone mapping.
  */
 
-export type FireSpot = Pick<Detection, 'lon' | 'lat' | 'frp' | 'row' | 'col'>
+export type FireSpot = Pick<Detection, 'lon' | 'lat' | 'frp' | 'row' | 'col'> & Partial<Pick<Detection, 'inside'>>
 
-// Height of the mark above the ground, in scene metres (the ground is already exaggerated).
-// Landscape clears the trees (candidate dots sit at 190); the data layers hug the surface.
-const LIFT_LANDSCAPE = 200
-const LIFT_DATA = 45
-// Scene metres an ember is wide at a size factor of 1; about 10 px at the default framing on a 1440 px window.
-const WORLD_SIZE = 150
-// Ember width in CSS px at a size factor of 1, never below or above these (so it neither vanishes
-// zoomed out nor swells zoomed in). The size factor then runs from SIZE_MIN to SIZE_MAX.
-const MIN_PX = 9
-const MAX_PX = 22
+// The scene-metre values (lift, ember width, pull) and the px clamps come from the scale's
+// `fire` values (lib/scale.ts). In the window: Landscape lift 200 clears the trees (candidate dots
+// sit at 190), data layers hug the surface at 45; an ember is 150 m wide at size factor 1, about
+// 10 px at the default framing on a 1440 px window, and 9 to 22 px wide whatever the zoom.
+// The size factor runs from SIZE_MIN to SIZE_MAX.
 const SIZE_MIN = 0.6
 const SIZE_MAX = 2.1
-// The marks are pulled this far towards the camera so a slope in front does not clip them.
-const PULL_M = 220
+// Detections outside the park are drawn at this opacity and part-desaturated.
+const OUTSIDE_ALPHA = 0.5
+const OUTSIDE_COLOUR = 0.6
 
 /** Size factor from sqrt(frp): linear between the faintest and the strongest detection. */
 export function sizeFactors(spots: readonly FireSpot[]): Float32Array {
@@ -68,14 +65,18 @@ uniform float uView;   // drawing-buffer height in px
 uniform float uPR;     // device pixels per CSS px
 uniform float uMinPx;
 uniform float uMaxPx;
+uniform float uMinScorch;
 uniform float uPull;
 attribute float aSize;
+attribute float aInside;
 attribute vec2 aState; // phase (0 pending, 1 burning, 2 scorch), age
 varying float vPhase;
 varying float vAge;
 varying float vScorchR;
+varying float vInside;
 
 void main() {
+  vInside = aInside;
   vPhase = aState.x;
   vAge = aState.y;
   if (vPhase < 0.5) {
@@ -90,7 +91,7 @@ void main() {
   gl_Position = projectionMatrix * mv;
   float scale = projectionMatrix[1][1] * 0.5 * uView;
   float base = clamp(uWorld * scale / dist, uMinPx * uPR, uMaxPx * uPR);
-  float scorchPx = max(base * aSize * 0.6, 4.5 * uPR);
+  float scorchPx = max(base * aSize * 0.6, uMinScorch * uPR);
   float px = scorchPx;
   if (vPhase < 1.5) {
     float emberPx = base * aSize * mix(1.0, 0.7, vAge);
@@ -105,6 +106,9 @@ const FRAGMENT = /* glsl */ `
 varying float vPhase;
 varying float vAge;
 varying float vScorchR;
+varying float vInside;
+uniform float uOutsideAlpha;
+uniform float uOutsideColour;
 
 void main() {
   float d = length(gl_PointCoord * 2.0 - 1.0);
@@ -134,6 +138,10 @@ void main() {
   float a = eA + sa * (1.0 - eA);
   if (a < 0.01) discard;
   vec3 col = (eCol * eA + scorchCol * sa * (1.0 - eA)) / a;
+  if (vInside < 0.5) {
+    col = mix(vec3(dot(col, vec3(0.299, 0.587, 0.114))), col, uOutsideColour);
+    a *= uOutsideAlpha;
+  }
   gl_FragColor = vec4(col, a);
 }
 `
@@ -152,19 +160,23 @@ export function buildFireMarks(
   meta: TerrainMeta,
   grid: { rows: number; cols: number },
   rect: SceneRect,
+  /** The scene's vertical exaggeration, the one the terrain mesh uses. */
+  exaggeration: number,
+  look: FireScale,
 ): FireMarks {
   const n = spots.length
   const positions = new Float32Array(n * 3)
   spots.forEach((s, i) => {
     const { x, z } = spotScene(s, meta, grid, rect)
     positions[i * 3] = x
-    positions[i * 3 + 1] = sampleHeight(heights, meta, x, z) * VERTICAL_EXAGGERATION
+    positions[i * 3 + 1] = sampleHeight(heights, meta, x, z) * exaggeration
     positions[i * 3 + 2] = z
   })
   const state = new Float32Array(n * 2)
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new BufferAttribute(positions, 3))
   geometry.setAttribute('aSize', new BufferAttribute(sizeFactors(spots), 1))
+  geometry.setAttribute('aInside', new BufferAttribute(Float32Array.from(spots, (s) => (s.inside === false ? 0 : 1)), 1))
   const stateAttr = new BufferAttribute(state, 2)
   geometry.setAttribute('aState', stateAttr)
 
@@ -173,13 +185,16 @@ export function buildFireMarks(
     vertexShader: VERTEX,
     fragmentShader: FRAGMENT,
     uniforms: {
-      uLift: { value: LIFT_DATA },
-      uWorld: { value: WORLD_SIZE },
+      uLift: { value: look.liftData },
+      uWorld: { value: look.worldSize },
       uView: { value: 1 },
       uPR: { value: 1 },
-      uMinPx: { value: MIN_PX },
-      uMaxPx: { value: MAX_PX },
-      uPull: { value: PULL_M },
+      uMinPx: { value: look.minPx },
+      uMaxPx: { value: look.maxPx },
+      uMinScorch: { value: look.minScorchPx },
+      uPull: { value: look.pull },
+      uOutsideAlpha: { value: OUTSIDE_ALPHA },
+      uOutsideColour: { value: OUTSIDE_COLOUR },
     },
     transparent: true,
     depthWrite: false,
@@ -205,7 +220,7 @@ export function buildFireMarks(
       stateAttr.needsUpdate = true
     },
     setLandscape(on) {
-      material.uniforms.uLift.value = on ? LIFT_LANDSCAPE : LIFT_DATA
+      material.uniforms.uLift.value = on ? look.liftLandscape : look.liftData
     },
     dispose() {
       geometry.dispose()

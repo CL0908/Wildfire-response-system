@@ -15,7 +15,7 @@ const GAP_DAYS = 30
 const GAP_SECONDS = 0.6
 /** Calendar days shown before the first detection, so the replay opens on an empty map. */
 const LEAD_DAYS = 3
-/** The whole replay at 1x speed, in seconds. */
+/** The whole replay at 1x speed, in seconds, unless createReplay is given another. */
 const TARGET_SECONDS = 52
 
 const DAY_MS = 86_400_000
@@ -24,12 +24,15 @@ export const PHASE_PENDING = 0
 export const PHASE_BURNING = 1
 export const PHASE_SCORCH = 2
 
-export type ReplayDetection = Pick<Detection, 'date' | 'cell'>
+export type ReplayDetection = Pick<Detection, 'date' | 'cell'> & Partial<Pick<Detection, 'inside'>>
 
 export interface ReplayState {
   /** Calendar day (days since 1970-01-01, fractional) the state belongs to. */
   day: number
-  /** Per detection, in the order given to createReplay: PHASE_PENDING, PHASE_BURNING or PHASE_SCORCH. */
+  /**
+   * Per detection, in the order given to createReplay: PHASE_PENDING, PHASE_BURNING or PHASE_SCORCH.
+   * `phase` and `age` are buffers owned by the replay and overwritten by the next stateAt call.
+   */
   phase: Uint8Array
   /** 0 at the detection date to 1 at the end of the glow window while burning; 1 once it is scorch, 0 while pending. */
   age: Float32Array
@@ -61,7 +64,10 @@ export interface Replay {
   tAt(date: Date | string): number
   stateAt(t: number, coveredCells?: ReadonlySet<number> | null): ReplayState
   /** The two running counts only, without building the per-detection arrays. */
-  countsAt(t: number, coveredCells?: ReadonlySet<number> | null): { count: number; covered: number | null }
+  countsAt(
+    t: number,
+    coveredCells?: ReadonlySet<number> | null,
+  ): { count: number; covered: number | null; inside: number }
   /** Months with at least one detection, positioned in playback time, in order. */
   monthBins: readonly MonthBin[]
   /** First day of each year that has detections, in playback time (the first year starts at 0). */
@@ -89,7 +95,10 @@ function dayOf(iso: string): number {
 const monthStartDay = (year: number, month: number) => Date.UTC(year, month - 1, 1) / DAY_MS
 
 /** Null when there are no usable detections. */
-export function createReplay(detections: readonly ReplayDetection[]): Replay | null {
+export function createReplay(
+  detections: readonly ReplayDetection[],
+  targetSeconds: number = TARGET_SECONDS,
+): Replay | null {
   const days = detections.map((d) => dayOf(d.date))
   if (days.length === 0 || days.some((d) => !Number.isFinite(d))) return null
   const sorted = [...days].sort((a, b) => a - b)
@@ -110,7 +119,7 @@ export function createReplay(detections: readonly ReplayDetection[]): Replay | n
 
   const gaps = stretches.length - 1
   const activeDays = stretches.reduce((sum, s) => sum + (s.day1 - s.day0), 0)
-  const secondsPerDay = (TARGET_SECONDS - gaps * GAP_SECONDS) / activeDays
+  const secondsPerDay = (targetSeconds - gaps * GAP_SECONDS) / activeDays
 
   const segments: Segment[] = []
   let clock = 0
@@ -147,30 +156,56 @@ export function createReplay(detections: readonly ReplayDetection[]): Replay | n
 
   const total = days.length
 
+  // Reused by every stateAt call, so playback allocates nothing per frame.
+  const phaseBuf = new Uint8Array(total)
+  const ageBuf = new Float32Array(total)
+  // Which detections fall in the covered cells; rebuilt only when the set changes.
+  let maskFor: ReadonlySet<number> | null = null
+  let mask: Uint8Array | null = null
+  function coveredMask(covered: ReadonlySet<number>): Uint8Array {
+    if (covered !== maskFor || !mask) {
+      const m = new Uint8Array(total)
+      for (let i = 0; i < total; i++) if (covered.has(detections[i].cell)) m[i] = 1
+      maskFor = covered
+      mask = m
+    }
+    return mask
+  }
+  // 1 where the detection is inside the area of interest (all of them unless the file says otherwise).
+  const insideMask = Uint8Array.from(detections, (d) => (d.inside === false ? 0 : 1))
+
   function countsAt(t: number, covered?: ReadonlySet<number> | null) {
     const day = dayAt(t)
+    const cov = covered ? coveredMask(covered) : null
     let count = 0
+    let inCovered = 0
     let inside = 0
     for (let i = 0; i < total; i++) {
       if (days[i] > day) continue
       count++
-      if (covered?.has(detections[i].cell)) inside++
+      inside += insideMask[i]
+      if (cov) inCovered += cov[i]
     }
-    return { count, covered: covered ? inside : null }
+    return { count, covered: cov ? inCovered : null, inside }
   }
 
   function stateAt(t: number, covered?: ReadonlySet<number> | null): ReplayState {
     const day = dayAt(t)
-    const phase = new Uint8Array(total)
-    const age = new Float32Array(total)
+    const cov = covered ? coveredMask(covered) : null
+    const phase = phaseBuf
+    const age = ageBuf
     let count = 0
     let burning = 0
-    let inside = 0
+    let inCovered = 0
     for (let i = 0; i < total; i++) {
       const since = day - days[i]
-      if (since < 0) continue
+      if (since < 0) {
+        phase[i] = PHASE_PENDING
+        age[i] = 0
+        continue
+      }
       count++
-      if (covered?.has(detections[i].cell)) inside++
+      if (cov) inCovered += cov[i]
       if (since < GLOW_DAYS) {
         phase[i] = PHASE_BURNING
         age[i] = since / GLOW_DAYS
@@ -180,7 +215,7 @@ export function createReplay(detections: readonly ReplayDetection[]): Replay | n
         age[i] = 1
       }
     }
-    return { day, phase, age, count, burning, countCovered: covered ? inside : null }
+    return { day, phase, age, count, burning, countCovered: cov ? inCovered : null }
   }
 
   // Monthly histogram, from the first month with data to the last.
