@@ -65,6 +65,7 @@ Point used: the API reports lat 14.446397, lon 101.26043 (elevation 685 m). Open
 Underlying model: the default "Best Match" blends ERA5 and ERA5-Land reanalysis (Copernicus C3S). Those grids are about 0.1 to 0.25 degrees, roughly 10 to 25 km. The grid is much coarser than the 20 km map window, so this is one wind value per hour for the whole map, not a per-cell field. Open-Meteo did not report which component supplied each hour.
 Licence: Creative Commons Attribution 4.0 International (CC BY 4.0), https://open-meteo.com/en/licence
 Attribution: Weather data by Open-Meteo.com (https://open-meteo.com). Reanalysis: weather reanalysis from the Copernicus Climate Change Service (C3S), as listed on the Open-Meteo licence page; the Copernicus licence document is the reference for exact ERA5 wording (not fetched).
+Terms of use: https://open-meteo.com/en/terms (read 19 November 2026). The free API is for non-commercial use only, with limits of 10,000 calls a day, 5,000 an hour and 600 a minute; `fetch_wind.py` makes 13 calls. The repository holds only the derived extract; re-running the fetch for commercial work needs an Open-Meteo subscription.
 
 ## Whole-park grid: `park_500m.npz`
 

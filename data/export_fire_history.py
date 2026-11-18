@@ -24,6 +24,8 @@ import os
 from datetime import date
 from pathlib import Path
 
+import numpy as np
+
 HERE = Path(__file__).resolve().parent
 PUBLIC = HERE.parent / "dashboards" / "public"
 CACHE = Path(os.environ.get("QP_DATA_CACHE", HERE.parent.parent / "data_cache")) / "firms"
@@ -110,7 +112,6 @@ def main():
         meta = json.loads(PARK_META.read_text())
         bounds = meta["bounds_deg"]
         rows_n, cols_n = meta["grid_shape"]
-        import numpy as np
         inside = np.load(PARK_NPZ)["inside_park"] > 0.5
         fields = FIELDS + ["inside"]
         source, note = PARK_SOURCE, PARK_NOTE

@@ -28,13 +28,12 @@ def brute_force(sees, w, k):
 @pytest.mark.parametrize("seed", range(25))
 def test_greedy_k1_is_the_brute_force_optimum(seed):
     sees, w = random_instance(seed)
-    chosen, cum = greedy_cover(sees, w, 1)
+    _, cum = greedy_cover(sees, w, 1)
     assert cum[0] == pytest.approx(brute_force(sees, w, 1))
-    assert coverage_value(sees, w, chosen) == pytest.approx(cum[0])
 
 
 @pytest.mark.parametrize("seed", range(10))
-@pytest.mark.parametrize("k", [2, 3])
+@pytest.mark.parametrize("k", [1, 2, 3])
 def test_greedy_is_feasible_and_within_its_guarantee(seed, k):
     sees, w = random_instance(seed)
     chosen, cum = greedy_cover(sees, w, k)
