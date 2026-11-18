@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { formatDateLong, formatInt } from '../lib/format'
+import { formatDate, formatDateLong, formatInt } from '../lib/format'
 import type { Replay } from '../lib/fireReplay'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import type { ParkRule } from '../lib/park'
@@ -169,7 +169,6 @@ export default function FireTimeline({ replay, t, playing, onTime, onPlaying, on
   const { count, covered, inside } = replay.countsAt(t, coveredCells)
   const date = replay.dateAt(t)
   const longDate = formatDateLong(isoOf(date))
-  const monthYear = longDate.split(' ').slice(1).join(' ')
 
   const maxCount = useMemo(() => Math.max(1, ...replay.monthBins.map((b) => b.count)), [replay])
   const bars = useMemo(
@@ -293,7 +292,10 @@ export default function FireTimeline({ replay, t, playing, onTime, onPlaying, on
       </button>
 
       <div className="ft-info">
-        <strong className="ft-date">{monthYear}</strong>
+        <strong className="ft-date">
+          <span className="ft-date-long">{longDate}</span>
+          <span className="ft-date-short">{formatDate(isoOf(date))}</span>
+        </strong>
         <div className="ft-counts">
           <span>
             {formatInt(count)} of {formatInt(replay.total)} detections

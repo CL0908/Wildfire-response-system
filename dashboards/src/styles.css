@@ -1646,6 +1646,11 @@ td.has-std {
   font-size: 0.95rem;
   font-weight: 650;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ft-date-short {
+  display: none;
 }
 
 .ft-counts {
@@ -1684,6 +1689,12 @@ td.has-std {
     min-width: 0;
     align-self: center;
     font-size: 0.9rem;
+  }
+  .ft-date-long {
+    display: none;
+  }
+  .ft-date-short {
+    display: inline;
   }
   .ft-counts {
     grid-area: counts;

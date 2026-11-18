@@ -992,6 +992,7 @@ export default function Terrain3D({
             const dotSize = isL ? DOT_SIZE_L : DOT_SIZE
             const dot = new Sprite(isL ? dotMaterialL : dotMaterial)
             dot.scale.setScalar(dotSize)
+            dot.renderOrder = 2 // after the fire marks (renderOrder 1) so embers never paint over a site dot
             dot.position.set(x, ground + (isL ? DOT_LIFT_L : DOT_SIZE / 2), z)
             markers.add(dot)
             continue

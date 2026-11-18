@@ -114,13 +114,13 @@ void main() {
   float d = length(gl_PointCoord * 2.0 - 1.0);
   if (d > 1.0) discard;
 
-  // Scorch: charcoal-brown disc with a faint warm rim. It fades in as the ember dies.
+  // Scorch: warm ash-brown disc with a bright burnt-orange rim (reads on dark canopy; embers stay brighter). It fades in as the ember dies.
   float scorchA = vPhase > 1.5 ? 1.0 : smoothstep(0.45, 1.0, vAge);
   float r = d / max(vScorchR, 0.001);
   float disc = 1.0 - smoothstep(0.86, 1.0, r);
   float rim = smoothstep(0.55, 0.85, r) * disc;
-  vec3 scorchCol = mix(vec3(0.13, 0.095, 0.075), vec3(0.58, 0.29, 0.13), rim * 0.75);
-  float sa = disc * scorchA * 0.92;
+  vec3 scorchCol = mix(vec3(0.16, 0.135, 0.115), vec3(0.84, 0.50, 0.24), rim);
+  float sa = disc * scorchA * 0.97;
 
   // Ember: yellow-white core, orange body, red-orange edge and a soft halo. Quick rise, slow decay.
   float eA = 0.0;
