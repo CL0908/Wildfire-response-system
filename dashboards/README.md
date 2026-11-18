@@ -2,11 +2,13 @@
 
 Single-page view of the sensor-placement results for Khao Yai National Park, in 3D (the default) or 2D: a 20 × 20 grid of 500 m cells, coloured by priority, hazard, ecological value, elevation, inside-park share or recorded fires. Pick a method (ILP, Greedy, SA, QAOA variants run on a simulator) to see which cells its sensors cover, and compare methods in the benchmark table.
 
+The page has two scales, switched on the control card: this 10 km window (the default) and the whole park, a 131 × 187 grid of 500 m cells covering the park plus a 5 km margin. The window is rows 47 to 66 and columns 10 to 29 of the park grid. The park scale shows placements for 10, 20 or 40 sensors under three rules (priority coverage, fire history, time to detection) in 3D and 2D, with its own sections below the map. `src/lib/scale.ts` defines `Scale = 'window' | 'park'` and `sceneScale()` returns every metre-based scene value; the park scene uses 150 m terrain exaggerated 4×, no trees and no shadow map.
+
 With real terrain the map shows elevation, fire history and land cover for the north-west edge of the park, with modelled hazard and value; the Data block lists sources and required attribution. If `results.json` has `terrain: "synthetic"`, the page says so and omits the real-data layers and attribution. QAOA results come from a simulator. There is no live sensor data. The benchmark shows no quantum advantage: the classical methods match or beat every QAOA variant, and the page checks this against the data before saying so.
 
 ## Layout
 
-The first screen is the map at full window size, with a floating card for the view (2D or 3D), data layer and method. Scrolling moves down the page; hold Ctrl (⌘ on Mac) and scroll, pinch, or use the buttons to zoom. Below it, one column of sections: the selected placement, the fire history, the benchmark, the hardware runs and the data sources. Each section's heading is a sentence computed from the data, and the full tables sit behind "Show the numbers". In the method charts a QAOA bar is the average shot; the best of 2,000 shots is a separate open marker.
+The first screen is the map at full window size, with a floating card for the scale, the view (2D or 3D), data layer and method. Scrolling moves down the page; hold Ctrl (⌘ on Mac) and scroll, pinch, or use the buttons to zoom. Below it, one column of sections: the selected placement, the fire history, the benchmark, the hardware runs and the data sources. Each section's heading is a sentence computed from the data, and the full tables sit behind "Show the numbers". In the method charts a QAOA bar is the average shot; the best of 2,000 shots is a separate open marker.
 
 ## Data
 
@@ -17,6 +19,9 @@ The page reads these files from `public/`, all written by Python. From the repo 
 | `public/results.json` | `python main.py` | map layers, methods, benchmark table |
 | `public/hardware.json` | `python hardware_runs/export_dashboard.py` | Hardware runs section |
 | `public/terrain.bin`, `public/terrain.json` | `python data/export_terrain_mesh.py` (needs `requirements-data.txt`) | 3D terrain surface |
+| `public/landcover.bin`, `public/landcover.json` | `python data/export_landcover_mesh.py` (needs `requirements-data.txt`) | Landscape layer in 3D |
+| `public/fires.json` | `python data/export_fire_history.py` (reads the FIRMS CSVs in `../data_cache/firms`; needs `results.json` for the window) | Fire history section and window replay |
+| `public/fires_park.json` | `python data/export_fire_history.py --park` (same CSVs; adds an inside-park flag per detection) | Whole-park replay |
 | `public/park.json`, `public/park_terrain.*`, `public/park_landcover.*` | `python data/export_park_dashboard.py` (needs `requirements-data.txt`; `--skip-rasters` rewrites `park.json` only) | Whole-park scale: grid layers, placements for 10, 20 and 40 sensors from `park/results.json`, 150 m terrain and land cover |
 
 Do not edit any of them by hand. If `results.json` is missing, the page says so. `hardware.json` is optional: if it is missing or malformed, the Hardware runs section is left out. The page makes no network requests beyond these files.
@@ -28,6 +33,8 @@ Do not edit any of them by hand. If `results.json` is missing, the page says so.
 ## Fire replay
 
 The "Fire replay" switch on the 3D stage plays the same 628 NASA FIRMS VIIRS detections in date order on the terrain, with a timeline bar to play, pause, scrub and change speed. It never starts by itself. The positions, dates and fire radiative power (which sets the mark size) are real; the glow, its 10-day fade, the scorch mark left behind and the compressed clock (gaps of more than 30 days between detections are crossed in under a second) are illustrative, and a detection is a 375 m hot spot, not a fire perimeter. With reduced motion the replay steps a month at a time instead of running, and the intro rotation stops as soon as playback starts. The marks are one `THREE.Points` draw (`src/lib/fireMarks.ts`) updated from the playback time without rebuilding the scene.
+
+At the whole-park scale the replay plays `public/fires_park.json` instead: 16,365 detections from 20 January 2012 to 31 December 2025, about 90 s at 1×. The 1,264 inside the park are drawn at full strength and the rest dimmer, so the margin's much larger count stays visible. The counts line shows the total, those inside the park, and those in view of the sensors (margin included); for the fire-history and time-to-detection rules it says the placement was chosen from the same detections, so that count is not an independent test. The park replay is 3D only; the 2D park map stays static.
 
 ## 3D view
 
