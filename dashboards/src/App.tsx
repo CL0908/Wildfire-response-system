@@ -1,7 +1,7 @@
 import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { useResults } from './lib/data'
 import { formatDate, formatRange } from './lib/format'
-import type { Results } from './types'
+import type { Method, Results } from './types'
 import type Terrain3DView from './components/Terrain3D'
 import MapView from './components/MapView'
 import ParkMapView, { type ParkMapLayer } from './components/ParkMapView'
@@ -24,6 +24,16 @@ import ParkSections from './components/ParkSections'
 import { parkTitleMeta } from './lib/parkText'
 import Footer from './components/Footer'
 import FireTimeline, { ReplaySwitch } from './components/FireTimeline'
+import { ResponseBar, ResponseControls, ResponseSwitch } from './components/FireResponse'
+import type { ResponseOverlay } from './components/ResponseLayer'
+import { useMediaQuery } from './lib/useMediaQuery'
+import {
+  buildScene,
+  defaultIgnition,
+  useResponse,
+  type CrewCount,
+  type ResponseMode,
+} from './lib/response'
 import { useHardware } from './lib/hardware'
 import { useRanger, type RangerData } from './lib/ranger'
 import { LANDSCAPE, availableLayers, type StageLayer } from './lib/layers'
@@ -103,6 +113,19 @@ function Dashboard({ results }: { results: Results }) {
   const [replayOn, setReplayOn] = useState(false)
   const [replayT, setReplayT] = useState(0)
   const [replayPlaying, setReplayPlaying] = useState(false)
+  // Fire response (window only): on or off, the ignition cell (row * cols + col), how the fire is detected,
+  // the number of crews, the hour shown and whether it is running. Its files load when it is first switched on.
+  const [responseOn, setResponseOn] = useState(false)
+  const [ignition, setIgnition] = useState(() =>
+    defaultIgnition(results.layers.fire_count, results.grid.rows, results.grid.cols),
+  )
+  const [respMode, setRespMode] = useState<ResponseMode>('sensors')
+  const [respCrews, setRespCrews] = useState<CrewCount>(1)
+  const [respT, setRespT] = useState(0)
+  const [respPlaying, setRespPlaying] = useState(false)
+  const [barH, setBarH] = useState(0)
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const response = useResponse(responseOn)
   useEffect(() => {
     let live = true
     void loadFires().then((s) => {
@@ -123,8 +146,30 @@ function Dashboard({ results }: { results: Results }) {
   const setReplay = useCallback((on: boolean) => {
     setReplayOn(on)
     setReplayPlaying(false)
-    if (on) setReplayT(0)
+    if (on) {
+      setReplayT(0)
+      setResponseOn(false)
+      setRespPlaying(false)
+    }
   }, [])
+  // With reduced motion the response opens paused on the finished picture instead of playing from the start.
+  const restartResponse = useCallback(
+    (horizon: number) => {
+      setRespT(reducedMotion ? horizon : 0)
+      setRespPlaying(!reducedMotion)
+    },
+    [reducedMotion],
+  )
+  const setResponse = (on: boolean) => {
+    setResponseOn(on)
+    if (on) {
+      setReplayOn(false)
+      setReplayPlaying(false)
+      restartResponse(24)
+    } else {
+      setRespPlaying(false)
+    }
+  }
   const fallBackTo2D = useCallback(() => {
     setView('2d')
     setFellBack(true)
@@ -142,7 +187,11 @@ function Dashboard({ results }: { results: Results }) {
     setFellBack(false)
     setScale(next)
     // Each scale has its own replay, so playback time does not carry over.
-    if (next !== scale) setReplay(false)
+    if (next !== scale) {
+      setReplay(false)
+      setResponseOn(false)
+      setRespPlaying(false)
+    }
   }
   const park = scale === 'park'
   useEffect(() => {
@@ -185,6 +234,46 @@ function Dashboard({ results }: { results: Results }) {
   const ranger = useRanger()
   const layerInfos = availableLayers(results.layers)
   const replayShown = replayOn && view === '3d' && replay !== null
+  const responseReady = response.status === 'ready' ? response.data : null
+  const responseActive = responseOn && !park
+  const respScene = useMemo(
+    () => (responseReady && responseActive ? buildScene(responseReady, ignition, respMode, respCrews) : null),
+    [responseReady, responseActive, ignition, respMode, respCrews],
+  )
+  const horizon = responseReady?.horizon ?? 24
+  const pickIgnition = useCallback(
+    (cell: number) => {
+      setIgnition(cell)
+      restartResponse(horizon)
+    },
+    [restartResponse, horizon],
+  )
+  const moveIgnition = useCallback(
+    (dRow: number, dCol: number) => {
+      const { rows, cols } = results.grid
+      const row = Math.min(rows - 1, Math.max(0, Math.floor(ignition / cols) + dRow))
+      const col = Math.min(cols - 1, Math.max(0, (ignition % cols) + dCol))
+      pickIgnition(row * cols + col)
+    },
+    [ignition, pickIgnition, results.grid],
+  )
+  // While the mode is on the map shows the placement the response was computed for, whatever method is picked.
+  const shownMethod: Method = useMemo(() => {
+    if (!respScene) return method
+    return {
+      ...method,
+      name: 'the fire-response model',
+      chosen: respScene.data.sensors.map((s) => s.id),
+      covered_cells: respScene.data.seenCells,
+    }
+  }, [method, respScene])
+  const overlay: ResponseOverlay | null = useMemo(
+    () => (respScene ? { scene: respScene, t: respT, onPick: pickIgnition, onMove: moveIgnition } : null),
+    [respScene, respT, pickIgnition, moveIgnition],
+  )
+  const threeResponse = useMemo(() => (respScene ? { scene: respScene, t: respT } : null), [respScene, respT])
+  const responseBar = respScene !== null
+  const responseReason = park ? 'Needs the 10 km window.' : undefined
   // The cells the chosen sensors see, when they sit on the same grid as the detections.
   const fireGrid = fireState?.status === 'ready' ? fireState.fires.grid : null
   const sensorGrid = park ? parkData?.meta : grid
@@ -198,6 +287,12 @@ function Dashboard({ results }: { results: Results }) {
       : fireState?.status === 'error'
         ? 'The fire detections could not be loaded.'
         : undefined
+  const closeResponseFromBar = () => {
+    setResponse(false)
+    window.setTimeout(() => {
+      stageRef.current?.querySelector<HTMLElement>('input[name="fire-response"]:checked, .controls-open')?.focus()
+    }, 0)
+  }
   const closeReplayFromBar = () => {
     setReplay(false)
     // The bar disappears with the focus on it; hand focus back to the switch, or to the Controls button.
@@ -230,7 +325,7 @@ function Dashboard({ results }: { results: Results }) {
       <a className="skip-link" href="#results">
         Skip to results
       </a>
-      <section ref={stageRef} className={`stage${view === '2d' ? ' view-2d' : ''}${fellBack ? ' has-notice' : ''}${view === '3d' && (park ? parkGround === 'landscape' : layer === 'landscape') ? ' look-day' : ''}${replayShown ? ' has-replay' : ''}`} aria-label="Map">
+      <section ref={stageRef} className={`stage${view === '2d' ? ' view-2d' : ''}${fellBack ? ' has-notice' : ''}${view === '3d' && (park ? parkGround === 'landscape' : layer === 'landscape') ? ' look-day' : ''}${replayShown || responseBar ? ' has-replay' : ''}${responseBar ? ' has-response' : ''}`} aria-label="Map">
         <div className="stage-scrim" aria-hidden="true" />
         <header ref={titleRef} className="stage-title">
           <h1>Q-Pithak</h1>
@@ -257,6 +352,7 @@ function Dashboard({ results }: { results: Results }) {
           <div className="card-section">
             <ScaleSwitch value={scale} onChange={pickScale} />
           </div>
+          {!(responseBar && view === '2d') && (
           <div className="card-section">
             <span className="card-label" aria-hidden="true">
               Layer
@@ -277,12 +373,26 @@ function Dashboard({ results }: { results: Results }) {
               <LayerSwitch layers={[LANDSCAPE, ...layerInfos]} value={layer} onChange={setLayer} />
             )}
           </div>
+          )}
           <ReplaySwitch
             on={replayShown}
             disabled={view === '2d' || replay === null}
             reason={replayReason}
             onChange={setReplay}
           />
+          <ResponseSwitch on={responseActive} disabled={park} reason={responseReason} onChange={setResponse} />
+          {responseActive && (
+            <ResponseControls
+              state={response}
+              mode={respMode}
+              crews={respCrews}
+              ignition={ignition}
+              onMode={setRespMode}
+              onCrews={setRespCrews}
+              onIgnition={pickIgnition}
+              scene={respScene}
+            />
+          )}
           {park ? (
             <>
               <ParkControls k={parkK} rule={parkRule} onK={setParkK} onRule={setParkRule} />
@@ -294,7 +404,7 @@ function Dashboard({ results }: { results: Results }) {
                 </p>
               )}
             </>
-          ) : (
+          ) : responseActive ? null : (
             <div className="card-section">
               <MethodPicker results={results} selected={methodIndex} onSelect={setMethodIndex} />
               <MethodDetail results={results} method={method} />
@@ -317,7 +427,7 @@ function Dashboard({ results }: { results: Results }) {
               )
             ) : (
               <div className="panel-2d">
-                <MapView results={results} layer={layer2d} method={method} />
+                <MapView results={results} layer={layer2d} method={shownMethod} response={overlay} />
               </div>
             )}
           </div>
@@ -338,7 +448,11 @@ function Dashboard({ results }: { results: Results }) {
               parkLayer={parkGround}
               parkK={parkK}
               parkRule={parkRule}
-              method={method}
+              method={shownMethod}
+              response={threeResponse}
+              onPickCell={threeResponse ? pickIgnition : undefined}
+              onMoveIgnition={threeResponse ? moveIgnition : undefined}
+              reserveBottom={view === '3d' ? barH : 0}
               replayShown={replayShown}
               replay={replay}
               replayT={replayT}
@@ -364,6 +478,18 @@ function Dashboard({ results }: { results: Results }) {
             coveredCells={coveredCells}
             methodName={method.name}
             parkRule={park ? parkRule : undefined}
+          />
+        )}
+        {respScene && (
+          <ResponseBar
+            scene={respScene}
+            t={respT}
+            playing={respPlaying}
+            onTime={setRespT}
+            onPlaying={setRespPlaying}
+            onClose={closeResponseFromBar}
+            onHeight={setBarH}
+            caveatsHref={ranger && !park ? '#ranger-caveats' : null}
           />
         )}
         <a className="results-link glass" href="#results">

@@ -39,6 +39,9 @@ import { ParkFireKey, ParkKey, ParkLegend } from './ParkLegend'
 import ParkReadout, { type ParkHover } from './ParkReadout'
 import { drawDrape, drawParkDrape, parkLayerRange } from '../lib/drape'
 import { buildFireMarks, type FireMarks } from '../lib/fireMarks'
+import { ResponseKey } from './ResponseLayer'
+import { calloutText, cellNote, crewPosition, type ResponseScene } from '../lib/response'
+import { OVERLAY_PX, calloutTexture, crewTexture, drawResponseOverlay, ignitionTexture, ringTexture, stationTexture } from '../lib/responseDraw'
 import type { Replay } from '../lib/fireReplay'
 import type { Detection } from '../lib/fires'
 import { LAYERS, layerRange, type StageLayer } from '../lib/layers'
@@ -102,6 +105,15 @@ interface Props {
   replayPlaying?: boolean
   /** The detections the replay was built from, in the same order. */
   detections?: readonly Detection[] | null
+  /**
+   * Fire response (window only): the scenario drawn over the ground at hour `t`. A click or tap on a cell calls
+   * `onPickCell`; arrow keys on the focused canvas call `onMoveIgnition`. `reserveBottom` is the px a bar
+   * covers at the bottom of the stage, which the terrain is framed above.
+   */
+  response?: { scene: ResponseScene; t: number } | null
+  onPickCell?: (cell: number) => void
+  onMoveIgnition?: (dRow: number, dCol: number) => void
+  reserveBottom?: number
   /** 'park' shows the whole park without markers, trees or data layers. The view is remounted on change. */
   scale?: Scale
   /** Whole park only: the placements and layers, what the ground shows, and the chosen sensor count and rule. */
@@ -166,6 +178,7 @@ const TAP_MAX_MOVE = 10
 const TAP_MAX_MS = 600
 
 type Update = (p: Props) => void
+type ResponseUpdate = (p: ResponseProps) => void
 
 /** What the pointer is over in the Landscape layer. */
 interface GroundHover {
@@ -455,7 +468,7 @@ function ariaLabel(layer: StageLayer, method: Method): string {
   return `3D terrain of the study area, coloured by ${layerName}, with candidate sites and the sensors placed by ${method.name} at sites ${method.chosen.join(', ')}. It can be rotated and zoomed. The same information is in the 2D map.`
 }
 
-function GroundReadout({ hover, results }: { hover: GroundHover | null; results: Results }) {
+function GroundReadout({ hover, results, extra }: { hover: GroundHover | null; results: Results; extra?: string }) {
   const { cols } = results.grid
   return (
     <div className="readout" aria-live="polite">
@@ -476,6 +489,7 @@ function GroundReadout({ hover, results }: { hover: GroundHover | null; results:
             {hover.landClass}
             {hover.treePct !== null ? ` · ${hover.treePct}% tree cover` : ''}
           </div>
+          {extra && <div>{extra}</div>}
         </>
       )}
     </div>
@@ -484,6 +498,14 @@ function GroundReadout({ hover, results }: { hover: GroundHover | null; results:
 
 type FireUpdate = (p: FireProps) => void
 type FireProps = Pick<Props, 'replayShown' | 'replay' | 'replayT' | 'replayPlaying' | 'detections'>
+type ResponseProps = Pick<Props, 'response' | 'onPickCell' | 'onMoveIgnition' | 'reserveBottom'>
+const ARROWS: Record<string, [number, number]> = {
+  ArrowUp: [-1, 0],
+  ArrowDown: [1, 0],
+  ArrowLeft: [0, -1],
+  ArrowRight: [0, 1],
+}
+const RESPONSE_HINT = ' Fire response is on: click or tap a cell to start a fire there, or press the arrow keys to move it.'
 
 export default function Terrain3D({
   results,
@@ -494,6 +516,10 @@ export default function Terrain3D({
   replayT = 0,
   replayPlaying = false,
   detections = null,
+  response = null,
+  onPickCell,
+  onMoveIgnition,
+  reserveBottom = 0,
   scale = 'window',
   parkData = null,
   parkLayer = 'landscape',
@@ -516,6 +542,9 @@ export default function Terrain3D({
   const update = useRef<Update | null>(null)
   const fireUpdate = useRef<FireUpdate | null>(null)
   const fireLatest = useRef<FireProps>({})
+  const responseUpdate = useRef<((p: ResponseProps) => void) | null>(null)
+  const responseLatest = useRef<ResponseProps>({})
+  const refit = useRef<(() => void) | null>(null)
   const unavailable = useRef(onUnavailable)
   const park = scale === 'park'
   // The park shows Landscape until its data has arrived.
@@ -571,6 +600,17 @@ export default function Terrain3D({
     fireLatest.current = { replayShown, replay, replayT, replayPlaying, detections }
     fireUpdate.current?.(fireLatest.current)
   }, [replayShown, replay, replayT, replayPlaying, detections])
+
+  // The fire response moves a texture and a few sprites; the scene is not rebuilt.
+  useEffect(() => {
+    responseLatest.current = { response, onPickCell, onMoveIgnition, reserveBottom }
+    responseUpdate.current?.(responseLatest.current)
+  }, [response, onPickCell, onMoveIgnition, reserveBottom])
+
+  // A bar over the bottom of the stage changes the room the terrain is framed in.
+  useEffect(() => {
+    refit.current?.()
+  }, [reserveBottom])
 
   useEffect(() => {
     const host = box.current
@@ -843,6 +883,8 @@ export default function Terrain3D({
           const b = box(selector)
           if (b) bottom = Math.min(bottom, b.top - GAP_PX)
         }
+        const reserve = responseLatest.current.reserveBottom ?? 0
+        if (reserve > 0) bottom = Math.min(bottom, h - reserve - GAP_PX)
         // A stage too small for all that keeps the old behaviour: use most of the canvas.
         if (right - left < w * 0.4) {
           left = EDGE_PX
@@ -896,6 +938,115 @@ export default function Terrain3D({
         markerLabels = []
       }
 
+      let baseLabel = ''
+      // Fire response: one overlay mesh sharing the ground's geometry (a transparent texture, repainted per frame)
+      // and a few sprites for the ignition, station, crews, detecting sensor and callout.
+      const respGroup = new Group()
+      respGroup.visible = false
+      scene.add(respGroup)
+      const overlayCanvas = document.createElement('canvas')
+      overlayCanvas.width = sc.markers ? latest.current.results.grid.cols * OVERLAY_PX : 1
+      overlayCanvas.height = sc.markers ? latest.current.results.grid.rows * OVERLAY_PX : 1
+      const overlayTexture = new CanvasTexture(overlayCanvas)
+      overlayTexture.colorSpace = SRGBColorSpace
+      overlayTexture.anisotropy = renderer.capabilities.getMaxAnisotropy()
+      const overlayMaterial = new MeshBasicMaterial({
+        map: overlayTexture,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        polygonOffsetUnits: -4,
+        fog: false,
+        toneMapped: false,
+      })
+      const overlay = new Mesh(geometry, overlayMaterial)
+      overlay.raycast = () => {}
+      overlay.renderOrder = 1
+      respGroup.add(overlay)
+      const spriteOf = (tex: CanvasTexture) => {
+        const m = new SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, fog: false, toneMapped: false })
+        const sprite = new Sprite(m)
+        sprite.renderOrder = 3
+        respGroup.add(sprite)
+        return sprite
+      }
+      const ignitionTex = ignitionTexture(accent)
+      const stationTex = stationTexture()
+      const ringTex = ringTexture()
+      const crewTex = [crewTexture(0), crewTexture(1)]
+      const ignitionSprite = spriteOf(ignitionTex)
+      const stationSprite = spriteOf(stationTex)
+      const ringSprite = spriteOf(ringTex)
+      const crewSprites = crewTex.map((t) => spriteOf(t))
+      const calloutSprite = spriteOf(new CanvasTexture(document.createElement('canvas')))
+      calloutSprite.center.set(0.5, 0)
+      let calloutFor = ''
+      const groundAt = (cx: number, cy: number, lift: number): Vector3 => {
+        const g = latest.current.results.grid
+        const x = rect.x0 + (cx / g.cols) * (rect.x1 - rect.x0)
+        const z = rect.z0 + (cy / g.rows) * (rect.z1 - rect.z0)
+        return new Vector3(x, sampleHeight(heights, meta, x, z) * exag + lift, z)
+      }
+      const applyResponse: ResponseUpdate = (p) => {
+        const rs = sc.markers ? p.response ?? null : null
+        respGroup.visible = rs !== null
+        const interactive = rs !== null && !!p.onPickCell
+        if (interactive) {
+          canvas.tabIndex = 0
+          canvas.setAttribute('role', 'application')
+        } else {
+          canvas.removeAttribute('tabindex')
+          canvas.setAttribute('role', 'img')
+        }
+        canvas.setAttribute('aria-label', baseLabel + (interactive ? RESPONSE_HINT : ''))
+        if (!rs) {
+          render()
+          return
+        }
+        const { scene: fire, t } = rs
+        drawResponseOverlay(overlayCanvas, fire, t, !lookIsLandscape)
+        overlayTexture.needsUpdate = true
+        const isL = lookIsLandscape
+        const lift = isL ? 260 : 200
+        const size = isL ? 330 : 280
+        ignitionSprite.scale.setScalar(size)
+        ignitionSprite.position.copy(groundAt(fire.ignition.cell[1] + 0.5, fire.ignition.cell[0] + 0.5, lift))
+        stationSprite.scale.setScalar(size * 0.9)
+        stationSprite.position.copy(groundAt(fire.ignition.station[1] + 0.5, fire.ignition.station[0] + 0.5, lift))
+        crewSprites.forEach((sprite, i) => {
+          const track = fire.tracks.find((tr) => tr.crew === i)
+          sprite.visible = !!track
+          if (!track) return
+          const pos = crewPosition(track, t)
+          sprite.scale.setScalar(size * 0.95)
+          sprite.position.copy(groundAt(pos.x, pos.y, lift + 40))
+        })
+        const detected = t >= fire.info.detection_h - 1e-9
+        const mastH = isL ? MAST_HEIGHT_L : MAST_HEIGHT
+        ringSprite.visible = detected && fire.detector !== null
+        if (fire.detector) {
+          ringSprite.scale.setScalar(isL ? 700 : 600)
+          ringSprite.position.copy(groundAt(fire.detector[1] + 0.5, fire.detector[0] + 0.5, mastH))
+        }
+        calloutSprite.visible = detected
+        const text = calloutText(fire)
+        if (text !== calloutFor) {
+          calloutFor = text
+          const made = calloutTexture(text)
+          calloutSprite.material.map?.dispose()
+          calloutSprite.material.map = made.texture
+          calloutSprite.material.needsUpdate = true
+          calloutSprite.userData.aspect = made.aspect
+        }
+        const h = isL ? 340 : 300
+        calloutSprite.scale.set(h * (calloutSprite.userData.aspect ?? 8), h, 1)
+        const at = fire.detector ?? fire.ignition.cell
+        const lo = 0.5
+        calloutSprite.position.copy(groundAt(at[1] + lo, at[0] + lo, (fire.detector ? mastH : lift) + 380))
+        render()
+      }
+
       const apply: Update = (props) => {
         // Park: the ground is Landscape until the park data has arrived; the window never has a park layer.
         const parkMode = !sc.markers
@@ -903,10 +1054,8 @@ export default function Terrain3D({
         const pLayer: ParkLayer = pd ? props.parkLayer ?? 'landscape' : 'landscape'
         const placement = pd ? parkPlacement(pd, props.parkK ?? 20, props.parkRule ?? 'fire_history') : null
         const p = props
-        canvas.setAttribute(
-          'aria-label',
-          parkMode ? parkAriaLabel(pLayer, props.parkK ?? 20, props.parkRule ?? 'fire_history') : ariaLabel(p.layer, p.method),
-        )
+        baseLabel = parkMode ? parkAriaLabel(pLayer, props.parkK ?? 20, props.parkRule ?? 'fire_history') : ariaLabel(p.layer, p.method)
+        canvas.setAttribute('aria-label', baseLabel)
 
         let dataCanvas: HTMLCanvasElement | null = null
         if (parkMode) {
@@ -1026,10 +1175,11 @@ export default function Terrain3D({
           markers.add(label)
           markerLabels.push({ material: labelMaterial, texture: labelTexture })
         }
-        render()
+        applyResponse(responseLatest.current)
       }
       apply(latest.current)
       update.current = apply
+      responseUpdate.current = applyResponse
 
       const applyFire: FireUpdate = (p) => {
         const list = p.detections ?? null
@@ -1267,9 +1417,22 @@ export default function Terrain3D({
         pending = { x, y }
         if (!raf) raf = requestAnimationFrame(flushPick)
       }
+      // Fire response: a press that ends where it began (a click, or a tap) picks the cell under it; a drag rotates.
+      const selectAt = (clientX: number, clientY: number) => {
+        const pick = responseLatest.current.onPickCell
+        if (!pick || !responseLatest.current.response) return
+        const hit = pickHit(clientX, clientY)
+        const grid = latest.current.results.grid
+        const cell = hit ? sceneToCell(hit.x, hit.z, grid, rect) : null
+        if (cell) pick(cell.row * grid.cols + cell.col)
+      }
+      let press: { id: number; x: number; y: number } | null = null
       let tap: { id: number; x: number; y: number; at: number } | null = null
       const onPointerDown = (e: PointerEvent) => {
-        if (e.pointerType !== 'touch') return
+        if (e.pointerType !== 'touch') {
+          press = e.button === 0 ? { id: e.pointerId, x: e.clientX, y: e.clientY } : null
+          return
+        }
         touchIds.add(e.pointerId)
         if (touchIds.size >= 2) stopRotation()
         tap = touchIds.size === 1 ? { id: e.pointerId, x: e.clientX, y: e.clientY, at: performance.now() } : null
@@ -1279,26 +1442,42 @@ export default function Terrain3D({
           if (tap && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_MAX_MOVE) tap = null
           return
         }
+        if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_MAX_MOVE) press = null
         lastMouse = { x: e.clientX, y: e.clientY }
         schedulePick(e.clientX, e.clientY)
       }
       const onPointerUp = (e: PointerEvent) => {
-        if (e.pointerType !== 'touch') return
+        if (e.pointerType !== 'touch') {
+          if (press && press.id === e.pointerId) selectAt(press.x, press.y)
+          press = null
+          return
+        }
         touchIds.delete(e.pointerId)
         if (tap && tap.id === e.pointerId && performance.now() - tap.at < TAP_MAX_MS) {
           stopRotation()
           schedulePick(tap.x, tap.y)
+          selectAt(tap.x, tap.y)
         }
         tap = null
       }
       const onPointerCancel = (e: PointerEvent) => {
         touchIds.delete(e.pointerId)
         tap = null
+        press = null
       }
+      const onCanvasKey = (e: KeyboardEvent) => {
+        const d = ARROWS[e.key]
+        const move = responseLatest.current.onMoveIgnition
+        if (!d || !move || !responseLatest.current.response) return
+        e.preventDefault()
+        move(d[0], d[1])
+      }
+      canvas.addEventListener('keydown', onCanvasKey)
       const onPointerLeave = (e: PointerEvent) => {
         if (e.pointerType === 'touch') return
         lastMouse = null
         pending = null
+        press = null
         lastGroundPixel = -2
         setHoverCell(null)
         setHoverGround(null)
@@ -1332,6 +1511,7 @@ export default function Terrain3D({
       const titleEl = host.closest('.stage')?.querySelector('.stage-title')
       if (titleEl) observer.observe(titleEl)
       resize()
+      refit.current = resize
       syncRotation()
       fireUpdate.current = applyFire
       applyFire(fireLatest.current)
@@ -1341,6 +1521,8 @@ export default function Terrain3D({
         alive = false
         update.current = null
         fireUpdate.current = null
+        responseUpdate.current = null
+        refit.current = null
         camera3d.current = null
         host.removeEventListener('wheel', onWheel, { capture: true })
         cancelAnimationFrame(raf)
@@ -1364,6 +1546,7 @@ export default function Terrain3D({
         canvas.removeEventListener('pointerup', onPointerUp)
         canvas.removeEventListener('pointercancel', onPointerCancel)
         canvas.removeEventListener('pointerleave', onPointerLeave)
+        canvas.removeEventListener('keydown', onCanvasKey)
         controls.removeEventListener('change', render)
         controls.removeEventListener('change', repick)
         controls.dispose()
@@ -1374,6 +1557,14 @@ export default function Terrain3D({
         boundaryMaterial.dispose()
         windowMaterial.dispose()
         fire?.dispose()
+        overlayMaterial.dispose()
+        overlayTexture.dispose()
+        for (const sprite of respGroup.children) {
+          if (sprite instanceof Sprite) {
+            sprite.material.map?.dispose()
+            sprite.material.dispose()
+          }
+        }
         drape?.dispose()
         dotTexture.dispose()
         headTexture.dispose()
@@ -1493,6 +1684,8 @@ export default function Terrain3D({
                   <ParkKey layer={parkGround} />
                   {replayShown && <ParkFireKey />}
                 </>
+              ) : response ? (
+                <ResponseKey horizon={response.scene.data.horizon} />
               ) : landscape || !info ? (
                 <LandscapeLegend classes={landKey} fires={replayShown} />
               ) : (
@@ -1507,7 +1700,11 @@ export default function Terrain3D({
                   covered={parkCovered}
                 />
               ) : landscape ? (
-                <GroundReadout hover={hoverGround} results={results} />
+                <GroundReadout
+                  hover={hoverGround}
+                  results={results}
+                  extra={response && hoverGround?.cell != null ? cellNote(response.scene, hoverGround.cell) : undefined}
+                />
               ) : (
                 <CellReadout
                   results={results}
@@ -1515,6 +1712,7 @@ export default function Terrain3D({
                   covered={covered}
                   cell={hoverCell}
                   idle="Hover or tap a cell for details."
+                  extra={response && hoverCell !== null ? cellNote(response.scene, hoverCell) : undefined}
                 />
               )}
             </div>
@@ -1544,6 +1742,12 @@ export default function Terrain3D({
                     {SCALE_NOTE[scale].demResolutionM} m.
                   </p>
                   <p>Sensor masts are not to scale.</p>
+                  {response && (
+                    <p>
+                      Fire response: cells are coloured by the hour the fire reaches them, and the crew paths and firebreaks are drawn flat on
+                      the ground. The ignition, station and crew markers are not to scale.
+                    </p>
+                  )}
                   {park && landscape && (
                     <p>
                       Ground colours come from ESA WorldCover 2021 land cover and Copernicus elevation. The shading,

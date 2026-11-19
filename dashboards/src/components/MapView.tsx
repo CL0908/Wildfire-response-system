@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import CellReadout from './CellReadout'
 import Legend from './Legend'
+import { ResponseCells2D, ResponseKey, ResponseMarks2D, type ResponseOverlay } from './ResponseLayer'
+import { UNREACHED } from '../lib/ranger'
+import { cellNote } from '../lib/response'
 import { LAYERS, cellFill, layerRange } from '../lib/layers'
 import type { LayerKey, Method, Results } from '../types'
 
@@ -10,9 +13,18 @@ interface Props {
   results: Results
   layer: LayerKey
   method: Method
+  /** Fire-response mode: the cells turn into a click target and the fire, crews and firebreaks are drawn over them. */
+  response?: ResponseOverlay | null
 }
 
-export default function MapView({ results, layer, method }: Props) {
+const ARROWS: Record<string, [number, number]> = {
+  ArrowUp: [-1, 0],
+  ArrowDown: [1, 0],
+  ArrowLeft: [0, -1],
+  ArrowRight: [0, 1],
+}
+
+export default function MapView({ results, layer, method, response = null }: Props) {
   const { grid, layers, sites, viewsheds } = results
   const { rows, cols } = grid
   const [hoverCell, setHoverCell] = useState<number | null>(null)
@@ -58,7 +70,22 @@ export default function MapView({ results, layer, method }: Props) {
         className="map-svg"
         viewBox={`0 0 ${cols * CELL} ${rows * CELL}`}
         role="group"
-        aria-label={`Map of ${rows} by ${cols} cells coloured by ${info.label}. ${method.name} places sensors at sites ${method.chosen.join(', ')}, covering ${method.covered_cells.length} of ${rows * cols} cells.`}
+        aria-label={
+          response
+            ? `Map of ${rows} by ${cols} cells showing a simulated fire response. Fire ignites at row ${response.scene.ignition.cell[0] + 1}, column ${response.scene.ignition.cell[1] + 1}, counted from the north-west corner. Sensors at sites ${method.chosen.join(', ')}. Click a cell to move the ignition, or use the arrow keys while the map has focus.`
+            : `Map of ${rows} by ${cols} cells coloured by ${info.label}. ${method.name} places sensors at sites ${method.chosen.join(', ')}, covering ${method.covered_cells.length} of ${rows * cols} cells.`
+        }
+        tabIndex={response ? 0 : undefined}
+        onKeyDown={
+          response
+            ? (e) => {
+                const d = ARROWS[e.key]
+                if (!d || e.target !== e.currentTarget) return
+                e.preventDefault()
+                response.onMove(d[0], d[1])
+              }
+            : undefined
+        }
         onMouseLeave={() => setHoverCell(null)}
       >
         <defs>
@@ -82,16 +109,20 @@ export default function MapView({ results, layer, method }: Props) {
               y={c.r * CELL}
               width={CELL}
               height={CELL}
-              fill={c.fill}
+              fill={response ? UNREACHED : c.fill}
               stroke="#fff"
               strokeOpacity="0.5"
               strokeWidth="0.5"
+              className={response ? 'rf-target' : undefined}
               onMouseEnter={() => setHoverCell(c.idx)}
+              onClick={response ? () => response.onPick(c.idx) : undefined}
             />
           ))}
           <g pointerEvents="none">
-            {cells
-              .filter((c) => !covered.has(c.idx))
+            {response && <ResponseCells2D scene={response.scene} t={response.t} />}
+            {!response &&
+              cells
+                .filter((c) => !covered.has(c.idx))
               .map((c) => (
                 <rect
                   key={c.idx}
@@ -187,6 +218,7 @@ export default function MapView({ results, layer, method }: Props) {
             )
           })}
         </g>
+        {response && <ResponseMarks2D scene={response.scene} t={response.t} />}
       </svg>
 
       <CellReadout
@@ -195,10 +227,11 @@ export default function MapView({ results, layer, method }: Props) {
         covered={covered}
         cell={shownCell}
         siteId={activeSiteInfo?.id ?? null}
-        idle="Hover a cell or focus a site for details."
+        idle={response ? 'Hover a cell for details; click one to ignite a fire there.' : 'Hover a cell or focus a site for details.'}
+        extra={response && shownCell !== null && activeSiteInfo === null ? cellNote(response.scene, shownCell) : undefined}
       />
 
-      <Legend info={info} lo={lo} hi={hi} />
+      {response ? <ResponseKey horizon={response.scene.data.horizon} /> : <Legend info={info} lo={lo} hi={hi} />}
     </div>
   )
 }

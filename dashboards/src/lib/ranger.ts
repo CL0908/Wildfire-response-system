@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { rampColor } from './color'
 
 export const RANGER_METHODS = ['greedy', 'lookahead', 'exact'] as const
 export type RangerMethod = (typeof RANGER_METHODS)[number]
@@ -235,3 +236,20 @@ export function formatHM(hours: number): string {
   const total = Math.round(hours * 60)
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
+
+/** Cell colour for "not reached within the horizon" in the ranger figures and the fire-response map. */
+export const UNREACHED = '#f1f1ed'
+export const INK = '#0f172a'
+/** Firebreak that fails: finished after the fire arrived. */
+export const FAILED = '#9a3412'
+/** Fire arrival maps onto the upper part of the ramp, so a reached cell never looks like an unreached one. */
+export const RAMP_LOW = 0.25
+
+/** Fire arrival hour -> cell colour: early arrival is dark, late is light; null (or Infinity) is not reached. */
+export function arrivalColor(hours: number | null, horizon: number): string {
+  if (hours === null || !Number.isFinite(hours)) return UNREACHED
+  return rampColor(RAMP_LOW + (1 - RAMP_LOW) * (1 - Math.min(1, hours / horizon)))
+}
+
+/** Crew 0 -> "A", crew 1 -> "B". */
+export const crewLetter = (crew: number) => String.fromCharCode(65 + crew)

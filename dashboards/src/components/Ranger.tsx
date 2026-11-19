@@ -2,7 +2,13 @@ import { useId, useState } from 'react'
 import { rampColor } from '../lib/color'
 import { formatInt } from '../lib/format'
 import {
+  FAILED,
+  INK,
+  RAMP_LOW,
   RANGER_METHODS,
+  UNREACHED,
+  arrivalColor,
+  crewLetter,
   formatHM,
   type CrewRun,
   type CrewSummary,
@@ -16,11 +22,6 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 
 /** Cell size in SVG units; the SVG scales to its box. */
 const CELL = 24
-const UNREACHED = '#f1f1ed'
-const INK = '#0f172a'
-const FAILED = '#9a3412'
-/** Fire arrival maps onto the upper part of the ramp, so a reached cell never looks like an unreached one. */
-const RAMP_LOW = 0.25
 
 const METHOD_NAME: Record<RangerMethod, string> = {
   greedy: 'Greedy',
@@ -38,7 +39,6 @@ const MOBILE = '(max-width: 719px)'
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 const crewWord = (n: number) => (n === 1 ? 'one crew' : n === 2 ? 'two crews' : `${n} crews`)
 const oneDecimal = (x: number) => x.toFixed(1)
-const crewLetter = (crew: number) => String.fromCharCode(65 + crew)
 const roleOf = (s: FeaturedScenario) => s.roles.map((r) => ROLE_NAME[r] ?? r).join(', ')
 const isTypical = (s: FeaturedScenario) => !s.roles.includes('largest-gap')
 
@@ -152,7 +152,7 @@ function Figure({ title, arrival, defences, stations, ignition, rows, cols, hori
         {arrival.map((h, i) => {
           const r = Math.floor(i / cols)
           const c = i % cols
-          const fill = h === null ? UNREACHED : rampColor(RAMP_LOW + (1 - RAMP_LOW) * (1 - Math.min(1, h / horizon)))
+          const fill = arrivalColor(h, horizon)
           return <rect key={i} x={c * CELL} y={r * CELL} width={CELL} height={CELL} fill={fill} stroke="#ffffff" strokeWidth="0.75" />
         })}
         {defences.map((d) => {
@@ -666,7 +666,7 @@ export default function Ranger({ data }: { data: RangerData }) {
   const { headline, lede } = headlines(data)
   const lines = paramLine(data)
   return (
-    <section className="ranger" aria-labelledby="ranger-title">
+    <section id="ranger" className="ranger" aria-labelledby="ranger-title">
       <div className="sec-head">
         <p className="ranger-kicker">Ranger response (modelled)</p>
         <h2 id="ranger-title">{headline}</h2>
@@ -678,7 +678,7 @@ export default function Ranger({ data }: { data: RangerData }) {
         <AggregateTables data={data} />
       </div>
       <Sensitivity data={data} />
-      <div className="chart-block">
+      <div className="chart-block" id="ranger-caveats">
         <h3>What this model leaves out</h3>
         <ul className="limits">
           {data.caveats.map((c) => (
