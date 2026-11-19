@@ -188,6 +188,35 @@ python -m ranger_response.experiment ; python -m ranger_response.export_dashboar
 
 `dashboards/public/ranger.json` (about 100 KiB, `model: "v2"`) holds: parameters with units and sources; the experiment protocol, the summary statistics and per-scenario results for all 20 scenarios; the sensitivity and post-hoc tables; three featured scenarios, each for one and two crews, with per-cell arrival times in hours (no response and each method), the defences (crew, order, cell, `arrive_h`, `finish_h`, `fire_arrival_h`, `held`), `proven_optimal` and `stop_reason`; a caveats list; the generation date. The featured scenarios are chosen by rules fixed up front: the scenario whose ignition cell has the highest smoothed fire-history weight (**most-fire-prone**), the scenario whose one-crew exact-minus-greedy gap is the median of the 20 (**median-gap**, lower median), and the scenario with the largest such gap (**largest-gap**, shown so the top of the distribution is visible; it is not typical). The exporter runs no solver: it replays the plans stored in `experiment_results.json` and fails if a stored value does not reproduce.
 
+## Click-to-respond precompute (site "Fire response" mode)
+
+Code: `response_explorer.py` (about 40 s on 2 cores), data: `dashboards/public/response.json` and `response_arrival.bin`, tests: `tests/test_response_explorer.py`. Reproduce: `python -m ranger_response.response_explorer` (`--measure N` times N ignitions first).
+
+**Model change.** Crews leave their station at a dispatch time `start_h` (the same quantity as the existing `delay_h`, now also available as `Instance2.start_h`, `make_instance2(start_h=...)` and `with_params(start_h=...)`). The fire still starts at t = 0; default 0 leaves every earlier result unchanged (tested against the stored experiment plans).
+
+**Setup.** Every one of the 400 cells is an ignition (all are burnable), with one representative wind: the median speed (2.06 m/s) and the circular-mean direction (from 186.9 degrees) of the daytime (10:00 to 18:00 UTC+7) fire-season hourly pool that `detection/fire_sim` draws scenario winds from (9,288 hours; the direction is not sharp, mean resultant length 0.51, and the most frequent 45-degree sector, 180 to 225, contains it). Station: the edge midpoint nearest the ignition, as in v2. Everything else is the v2 default (r0 = 2 m/min, 24 h, walk 2 km/h, 5.2 h per cell).
+
+**Detection.** The sensor placement is the exact (ILP) optimum shown on the site, sites 4, 6, 8, 10 (objective 120.03). Following `detection/objective.py`, a sensor detects the moment the no-response fire enters any cell of its viewshed (no delay), the satellite detects 6 h after ignition (`DEFAULT_BASELINE_MIN`, an assumption there based on VIIRS overpass gaps and up to 3 h data latency), and detection is the earlier of the two. So a fire the sensors only see after 6 h counts as satellite-detected; this is the min rule of `detection/`, slightly broader than "no sensor sees it within the horizon". The detecting site is the one with the earliest time (tie: lowest id). Sensors see only cells of the 20 x 20 window and the fire here spreads only inside it (`detection/` lets fire leave and re-enter the window), a small difference at the edges. **Dispatch** is 0.5 h after detection (my assumption; no data), so `start_h` = detection + 0.5: 0.5 h to 6.5 h.
+
+**Solver.** `solve_lookahead2` for each (ignition, mode, crews), 1,600 runs plus 400 no-response runs. Sensors-mode plans also try the satellite-mode plan of the same ignition (crews leaving earlier can follow it, and every break then finishes earlier, which cannot make it worse), so sensors never score below satellite. Mean 0.04 s per run (max 0.5 s), 30 s wall for all 1,600 on 2 cores. The plans are heuristic, not proven optimal. Check on 10 random ignitions (seed 2024, sensors mode, one crew, exact warm-started from the lookahead plan, 20 s limit): exact proven optimal in all 10 and equal to lookahead in 9; in one (ignition (5, 2)) exact saved 3.87 against 3.74 value units.
+
+**Results (400 ignitions, uniform over cells; fire-history-weighted means are in the json and within a few percent).** Without response a fire burns a mean 32.8 cells (13.4 of 152.7 value units).
+
+| | sensors detect | at ignition | median / mean detection (h) | satellite |
+|---|---|---|---|---|
+| share of ignitions | 78.5% | 61.5% | 0.0 / 1.91 (0.79 mean among sensor-detected) | 21.5% |
+
+| crews | detection | mean value saved | median | mean cells burned | % of burning value saved (mean) |
+|---|---|---|---|---|---|
+| 1 | sensors | 3.63 | 3.52 | 26.3 | 31.4 |
+| 1 | satellite 6 h | 2.14 | 2.08 | 28.9 | 20.4 |
+| 2 | sensors | 6.33 | 6.00 | 20.5 | 50.9 |
+| 2 | satellite 6 h | 3.76 | 3.54 | 25.5 | 34.1 |
+
+Sensors do better in 299 of 400 ignitions and equal in the rest (the 101 ties are mostly fires the sensors do not see before the satellite). Sensor-detected fires are seen at ignition (their first cell is in a viewshed) far more often than after spread, so the advantage is mostly the 6 h head start, and it exists only for fires that start where sensors can see.
+
+**Files.** `response.json` has the grid, parameters with sources, assumptions, the sensor placement and seen cells, per ignition the station, baseline, detection (`detection_h`, `detecting_site` or `"satellite"`, `start_h`) per mode and for each of `sensors_1`, `sensors_2`, `satellite_1`, `satellite_2` the summary and defences (crew, order, cell, `arrive_h`, `finish_h`, `fire_arrival_h`, `held`), the aggregates, the sanity check and caveats. `response_arrival.bin` is `uint8[ignition 400][plan 5][cell 400]` with no header, plans in the order `no_response, sensors_1, sensors_2, satellite_1, satellite_2`, ignition id and cell index = row * 20 + col, value x 0.1 = arrival hours, 255 = not reached within 24 h (error at most 0.05 h). About 820 KiB + 781 KiB. Plans from a deterministic run reproduce byte for byte.
+
 ---
 
 # Appendix: model v1

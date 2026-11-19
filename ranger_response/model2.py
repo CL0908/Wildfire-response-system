@@ -15,7 +15,7 @@ Rules
     is not burnable or has a finished firebreak, and at least one of the two is a firebreak. Natural
     gaps between two non-burnable cells are left as fire_sim has them. Without this rule a fire
     would slip diagonally between two firebreak cells that touch at a corner.
-  * A crew starts at its station at t = `delay_h` and walks in a straight line between cell centres at
+  * A crew starts at its station at t = `delay_h` (= `start_h`, the dispatch time; default 0) and walks in a straight line between cell centres at
     `walk_kmh`, then needs `cut_h` hours to cut a firebreak across a cell. It executes its ordered list
     whether or not an earlier firebreak held; a failed firebreak still costs the crew its time.
   * A firebreak at cell x finished at time f holds iff f <= the earliest time fire would reach x given
@@ -68,6 +68,11 @@ class Instance2:
         return len(self.stations)
 
     @property
+    def start_h(self) -> float:
+        """Crew dispatch time: crews leave their station at this hour after ignition (alias of `delay_h`)."""
+        return self.delay_h
+
+    @property
     def fuel(self) -> np.ndarray:
         return self.burnable
 
@@ -101,12 +106,29 @@ class Instance2:
         return t
 
     def with_params(self, **kw) -> "Instance2":
-        """Copy with cut_h / walk_kmh / delay_h / horizon_h changed (the spread graph is shared)."""
+        """Copy with cut_h / walk_kmh / delay_h (= start_h) / horizon_h / ignitions / stations changed.
+
+        The spread graph (and so the wind, fuel and r0) is shared; use it for many ignitions under one wind."""
         import copy
         new = copy.copy(self)
+        if "start_h" in kw:
+            if "delay_h" in kw:
+                raise ValueError("give start_h or delay_h, not both")
+            kw = dict(kw)
+            kw["delay_h"] = kw.pop("start_h")
         for k, v in kw.items():
-            if k not in ("cut_h", "walk_kmh", "delay_h", "horizon_h"):
+            if k not in ("cut_h", "walk_kmh", "delay_h", "horizon_h", "ignitions", "stations"):
                 raise ValueError(k)
+            if k == "ignitions":
+                v = tuple((int(r), int(c)) for r, c in v)
+                if not v or any(not self.burnable[r, c] for r, c in v):
+                    raise ValueError("ignitions must be burnable cells")
+            if k == "stations":
+                v = tuple((int(r), int(c)) for r, c in v)
+                if not v:
+                    raise ValueError("need at least one station")
+            if k == "delay_h" and v < 0:
+                raise ValueError("start_h / delay_h must be >= 0")
             setattr(new, k, v)
         new._cache = {}
         new.params = dict(self.params)
@@ -125,7 +147,10 @@ def wind_edge_hours(g: _Graph, speed_ms: float, from_deg: float) -> np.ndarray:
 def make_instance2(fuel_factor, value, dem_m, ignitions: Sequence[Cell], stations: Sequence[Cell],
                    wind_speed_ms: float = 0.0, wind_from_deg: float = 0.0, r0_m_min: float = 2.0,
                    horizon_h: float = DEFAULT_HORIZON_H, walk_kmh: float = DEFAULT_WALK_KMH,
-                   cut_h: float = 1.0, delay_h: float = 0.0, cell_m: float = CELL_M) -> Instance2:
+                   cut_h: float = 1.0, delay_h: float = 0.0, cell_m: float = CELL_M,
+                   start_h: Optional[float] = None) -> Instance2:
+    if start_h is not None:             # start_h is the clearer name for delay_h (crew dispatch time)
+        delay_h = start_h
     fuel_factor = np.asarray(fuel_factor, dtype=float)
     value = np.asarray(value, dtype=float)
     dem_m = np.asarray(dem_m, dtype=float)

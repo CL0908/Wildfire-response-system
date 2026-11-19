@@ -102,6 +102,8 @@ Every in-park cell is treated as a possible site, with no account of road access
 
 Also in the repo: `solvers/qaoa_hardware.py`, a script for running QAOA on IBM quantum hardware, or IQM hardware through qBraid.
 
+**Click-to-respond precompute.** For every one of the 400 cells of the window as an ignition, `python -m ranger_response.response_explorer` works out which sensor of the site's optimal placement (sites 4, 6, 8, 10) sees the fire first and when (the detection rule of `detection/`: the fire entering a seen cell; the satellite detects after 6 h), sends one or two crews 0.5 h after detection (an assumption), and writes `dashboards/public/response.json` and `response_arrival.bin` so the site can show it with no optimisation in the browser. One representative wind is used (median daytime fire-season speed 2.06 m/s, circular-mean direction 186.9 degrees) and plans come from the lookahead heuristic, not a proven optimum. Averaged over the 400 ignitions, sensors detect 78.5% of fires before the satellite (61.5% at ignition) and with one crew save 3.6 value units against 2.1 for satellite detection (2 crews: 6.3 against 3.8; see `ranger_response/README.md`). A simulation with an assumed dispatch time, wind and cutting rate, not a forecast.
+
 ## Run
 
 ```bash

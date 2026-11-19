@@ -1250,13 +1250,13 @@ td.has-std {
   justify-content: center;
   /* Below the title block, whose bottom edge App measures into --title-bottom. */
   --top-2d: calc(var(--title-bottom, 76px) + 12px);
-  padding: var(--top-2d) 368px 64px 16px;
+  padding: var(--top-2d) 368px var(--pad-b-2d, 64px) 16px;
 }
 
 .panel-2d {
   /* Panel width: the free width, or whatever keeps the map, readout and legend inside the stage height. */
   --panel-pad: 16px;
-  width: min(100%, calc(var(--stage-h) - var(--top-2d) - 64px - 210px));
+  width: min(100%, calc(var(--stage-h) - var(--top-2d) - var(--pad-b-2d, 64px) - 210px));
   max-height: 100%;
   overflow: auto;
   padding: var(--panel-pad);
@@ -1310,7 +1310,7 @@ td.has-std {
 @media (min-width: 1100px) {
   /* Map on the left, readout and legend beside it. */
   .panel-2d {
-    width: min(100%, calc(var(--stage-h) - var(--top-2d) - 64px + 16px + 260px));
+    width: min(100%, calc(var(--stage-h) - var(--top-2d) - var(--pad-b-2d, 64px) + 16px + 260px));
   }
   .panel-2d .map {
     display: grid;
@@ -1357,7 +1357,7 @@ td.has-std {
     max-width: calc(100% - 32px);
   }
   .stage-2d {
-    padding: var(--top-2d) 16px 64px;
+    padding: var(--top-2d) 16px var(--pad-b-2d, 64px);
   }
   /* Above the Results link, which sits at the same bottom offset. */
   .stage-notice {
@@ -1399,7 +1399,7 @@ td.has-std {
     display: none;
   }
   .stage-2d {
-    padding: var(--top-2d) 16px 64px;
+    padding: var(--top-2d) 16px var(--pad-b-2d, 64px);
   }
   .stage-zoom {
     flex-direction: column;
@@ -1739,7 +1739,7 @@ td.has-std {
     right: 72px;
   }
   /* The bar and the legend together would cover the map on a phone; the hover readout stays. */
-  .has-replay .stage-chip > .legends,
+  .has-replay .stage-chip > .legends:not(.rf-key),
   .has-replay .stage-chip > .key,
   .has-replay .stage-chip > .land-note {
     display: none;
@@ -1937,5 +1937,357 @@ td.has-std {
   .ranger .figures dd {
     font-size: 30px;
     white-space: normal;
+  }
+}
+
+/* Fire response */
+.stage.has-response {
+  /* The 2D map stops above the bar, which App measures into --replay-h. */
+  --pad-b-2d: calc(var(--replay-h, 0px) + 32px);
+}
+
+@media (max-width: 999.98px) {
+  .stage.has-response {
+    --pad-b-2d: calc(64px + var(--replay-h, 0px) + 8px);
+  }
+}
+
+.rf-target {
+  cursor: crosshair;
+}
+
+.panel-2d .map-svg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.stage-canvas canvas:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -3px;
+}
+
+/* Units here are the 2D map's SVG units (20 per cell). */
+.rf-chip {
+  font-size: 6.2px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-crew-letter {
+  font-size: 7.4px;
+  font-weight: 700;
+}
+
+.rf-callout {
+  font-size: 7.6px;
+  font-weight: 650;
+}
+
+.rf-key {
+  gap: 6px 16px;
+}
+
+.rf-key .legend {
+  flex-wrap: nowrap;
+}
+
+.rf-key .ramp i {
+  width: 90px;
+}
+
+.rf-key .key {
+  gap: 4px 14px;
+}
+
+.rf-key .key li {
+  font-size: 0.82rem;
+}
+
+.rf-controls {
+  gap: 10px;
+}
+
+.rf-error {
+  color: #fecaca;
+}
+
+.rf-pick {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rf-pick label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.rf-pick select {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 3px 6px;
+  font: inherit;
+  color: var(--on-dark);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius);
+}
+
+.rf-pick select:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+.rf-pick option {
+  color: var(--ink);
+  background: #fff;
+}
+
+.rf-assumptions {
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--on-dark-muted);
+}
+
+.rf-assumptions summary {
+  cursor: pointer;
+  padding: 4px 0;
+  font-weight: 600;
+}
+
+.rf-assumptions ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
+}
+
+.response-bar .ft-body {
+  grid-template-areas:
+    'play track speed close'
+    'info info info info'
+    'cmp cmp cmp cmp'
+    'cav cav cav cav';
+}
+
+.response-bar .ft-track {
+  height: 54px;
+}
+
+.rf-ticks span {
+  white-space: nowrap;
+}
+
+.rf-ticks span:first-child {
+  border-left-color: transparent;
+}
+
+.rf-ticks span:last-child {
+  padding: 0 3px 0 0;
+  border-left: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.45);
+  transform: translateX(-100%);
+}
+
+.rf-mark {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 40px;
+  margin-left: -1px;
+  pointer-events: none;
+}
+
+.rf-mark-detect {
+  background: var(--ring);
+}
+
+.rf-mark-leave {
+  background: #fff;
+  opacity: 0.8;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  background: repeating-linear-gradient(to bottom, #fff 0 4px, transparent 4px 7px);
+}
+
+.rf-info {
+  grid-area: info;
+}
+
+.rf-of {
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--on-dark-muted);
+}
+
+.rf-compare-wrap {
+  grid-area: cmp;
+  min-width: 0;
+}
+
+.rf-compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-compare th,
+.rf-compare td {
+  padding: 3px 8px 3px 0;
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.rf-compare thead th,
+.rf-compare thead td {
+  border-top: 0;
+  font-size: 0.74rem;
+  color: var(--on-dark-muted);
+}
+
+.rf-compare thead th.is-shown::after {
+  content: ' (on map)';
+  font-weight: 400;
+}
+
+.rf-compare tbody th {
+  font-weight: 400;
+  color: var(--on-dark-muted);
+  white-space: nowrap;
+}
+
+.rf-compare small {
+  font-size: 0.72rem;
+  line-height: 1.2;
+  font-weight: 400;
+  color: var(--on-dark-muted);
+}
+
+.rf-compare tbody th small {
+  display: block;
+}
+
+.rf-compare .rf-win {
+  font-weight: 700;
+  color: #fff;
+  box-shadow: inset 3px 0 0 var(--ring);
+  padding-left: 7px;
+}
+
+.rf-compare .rf-edge {
+  color: var(--ring);
+  font-weight: 600;
+}
+
+.rf-text {
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--on-dark);
+}
+
+.rf-caveat {
+  grid-area: cav;
+}
+
+.rf-caveat a {
+  color: var(--ring);
+}
+
+@container fire-timeline (max-width: 380px) {
+  .response-bar .ft-body {
+    grid-template-areas:
+      'play date speed close'
+      'track track track track'
+      'counts counts counts counts'
+      'cmp cmp cmp cmp'
+      'cav cav cav cav';
+  }
+  .response-bar .rf-of {
+    display: none;
+  }
+  .response-bar .ft-date {
+    min-width: 0;
+  }
+  .rf-compare {
+    font-size: 0.76rem;
+  }
+  .rf-compare th,
+  .rf-compare td {
+    padding-right: 5px;
+  }
+  .rf-compare thead th.is-shown::after {
+    content: '';
+  }
+  .rf-compare .rf-row-leave,
+  .response-bar .ft-counts {
+    display: none;
+  }
+  .rf-compare td small {
+    display: block;
+  }
+}
+
+/*
+ * Wide screens: the bar sits between the legend chip and the control card, so the card keeps its full
+ * height. The 2D map has no legend chip, so there the Results link moves to the left corner.
+ */
+@media (min-width: 1000px) {
+  .response-bar {
+    right: calc(16px + 320px + 12px);
+  }
+  .has-response .stage-card {
+    max-height: calc(100% - 88px);
+  }
+}
+
+@media (min-width: 1280px) {
+  .view-2d.has-response .results-link {
+    left: 16px;
+    bottom: 16px;
+    transform: none;
+  }
+}
+
+/* Not wide enough for the chip and the bar side by side: the bar takes the width left of the card and the chip rises over it. */
+@media (min-width: 1000px) and (max-width: 1279.98px) {
+  .response-bar {
+    left: 16px;
+    bottom: 64px;
+  }
+  .has-response .stage-info {
+    bottom: calc(64px + var(--replay-h, 0px) + 8px);
+  }
+  .has-response .results-link {
+    bottom: 16px;
+  }
+  .stage.has-response {
+    --pad-b-2d: calc(64px + var(--replay-h, 0px) + 8px);
+  }
+}
+
+@media (max-width: 719px) {
+  .rf-key .key {
+    display: none;
+  }
+}
+
+/* Phones: the 2D map is just the map and a one-line scale above the bar; the hover readout has no use on touch. */
+@media (max-width: 719px) {
+  .has-response .panel-2d {
+    width: min(100%, calc(var(--stage-h) - var(--top-2d) - var(--pad-b-2d) - 70px));
+  }
+  .has-response .panel-2d .readout {
+    display: none;
+  }
+  .view-2d.has-response .response-bar {
+    right: 16px;
+  }
+  .rf-caveat {
+    font-size: 0.72rem;
   }
 }
