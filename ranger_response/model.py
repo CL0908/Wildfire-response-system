@@ -190,9 +190,11 @@ def build_instance(surf: dict, ignitions: Sequence[Cell], stations: Sequence[Cel
                    value_key: str = "priority", speed: float = 3.0, work_time: int = 1,
                    horizon: Optional[int] = None,
                    downhill_drop_m: float = DEFAULT_DOWNHILL_DROP_M,
-                   downhill_time: int = DEFAULT_DOWNHILL_TIME) -> Instance:
-    """Instance from a priority_surface dict: fuel = hazard >= fuel_threshold, value = surf[value_key]."""
-    inst = make_instance(surf["hazard"] >= fuel_threshold, surf[value_key], surf["dem_m"],
+                   downhill_time: int = DEFAULT_DOWNHILL_TIME, fuel=None) -> Instance:
+    """Instance from a priority_surface dict: fuel = hazard >= fuel_threshold (or the given
+    boolean `fuel` mask), value = surf[value_key]."""
+    mask = surf["hazard"] >= fuel_threshold if fuel is None else np.asarray(fuel, dtype=bool)
+    inst = make_instance(mask, surf[value_key], surf["dem_m"],
                          ignitions, stations, speed, work_time, horizon,
                          downhill_drop_m, downhill_time)
     inst.params.update(fuel_threshold=fuel_threshold, value_key=value_key)

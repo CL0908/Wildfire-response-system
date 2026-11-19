@@ -396,3 +396,57 @@ def test_moving_constraint_binds():
     assert fast.defences[0].held and fast.defences[0].finish == 3
     assert not slow.defences[0].held and slow.defences[0].finish == 5
     assert fast.objective == 5 and slow.objective == 0
+
+
+# 8. real Khao Yai window (model v1; the dashboard exporter and model v2 are tested in test_ranger_v2.py) ----------------------------------------------
+
+import json
+import os
+
+from ranger_response.real import build_real_surface, ignitions_by_fire_history, real_fuel_mask
+from ranger_response.run import make_instance_for
+
+RESULTS_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "dashboards", "public", "results.json")
+
+
+def test_real_instance_is_the_site_window_cell_for_cell():
+    surf, inst = make_instance_for("real")
+    assert (inst.rows, inst.cols) == (20, 20) and surf["window"] == (15, 3)
+    assert inst.n_fuel == int((surf["hazard"] >= 0.55).sum()) == 256
+    assert np.array_equal(inst.fuel, surf["hazard"] >= 0.55)
+    assert np.array_equal(inst.dem_m, surf["dem_m"]) and np.array_equal(inst.value, surf["priority"])
+    if os.path.exists(RESULTS_JSON):
+        with open(RESULTS_JSON) as f:
+            site = json.load(f)
+        if site.get("terrain") == "real":
+            assert np.allclose(np.array(site["layers"]["hazard"]), surf["hazard"], atol=1e-4)
+            assert np.allclose(np.array(site["layers"]["elevation_m"]), surf["dem_m"], atol=0.1)
+            assert np.array_equal(np.array(site["layers"]["fire_count"]), surf["fire_count"])
+
+
+def test_real_default_ignition_is_most_burned_fuel_cell_and_station_is_edge_midpoint():
+    surf, inst = make_instance_for("real")
+    ig = inst.ignitions[0]
+    assert inst.fuel[ig]
+    assert surf["fire_count"][ig] == surf["fire_count"][inst.fuel].max()
+    tied = [rc for rc in zip(*np.nonzero(inst.fuel & (surf["fire_count"] == surf["fire_count"][ig])))]
+    assert surf["hazard"][ig] == max(surf["hazard"][rc] for rc in tied)
+    assert inst.stations == ((0, 10),)
+    alts = ignitions_by_fire_history(surf, inst.fuel, 4)
+    assert alts[0] == ig and len(set(alts)) == 4
+
+
+def test_real_landcover_rule_marks_every_cell_of_this_window_as_fuel():
+    surf = build_real_surface()
+    assert real_fuel_mask(surf, "landcover").all()
+    _, inst = make_instance_for("real", fuel_rule="landcover")
+    assert inst.n_fuel == 400
+    with pytest.raises(ValueError):
+        real_fuel_mask(surf, "nonsense")
+
+
+def test_synthetic_default_is_unchanged():
+    surf, inst = make_instance_for("synthetic")
+    assert inst.n_fuel == 253 and inst.ignitions == ((2, 5),) and inst.stations == ((0, 10),)
+    assert surf["source"] == "synthetic"

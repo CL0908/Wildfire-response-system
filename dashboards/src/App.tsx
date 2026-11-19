@@ -19,11 +19,13 @@ import Placement from './components/Placement'
 import FireHistory from './components/FireHistory'
 import DataSources from './components/DataSources'
 import Hardware from './components/Hardware'
+import Ranger from './components/Ranger'
 import ParkSections from './components/ParkSections'
 import { parkTitleMeta } from './lib/parkText'
 import Footer from './components/Footer'
 import FireTimeline, { ReplaySwitch } from './components/FireTimeline'
 import { useHardware } from './lib/hardware'
+import { useRanger, type RangerData } from './lib/ranger'
 import { LANDSCAPE, availableLayers, type StageLayer } from './lib/layers'
 import { loadFires, type FiresState } from './lib/fires'
 import { createReplay } from './lib/fireReplay'
@@ -58,15 +60,18 @@ const ResultSections = memo(function ResultSections({
   results,
   method,
   hardware,
+  ranger,
 }: {
   results: Results
   method: Results['methods'][number]
   hardware: HardwareData | null
+  ranger: RangerData | null
 }) {
   return (
     <main id="results" className="results" tabIndex={-1}>
       <Placement results={results} method={method} />
       <FireHistory results={results} method={method} />
+      {ranger && <Ranger data={ranger} />}
       <Benchmark rows={results.benchmark} />
       {hardware && <Hardware data={hardware} />}
       <DataSources results={results} />
@@ -177,6 +182,7 @@ function Dashboard({ results }: { results: Results }) {
   const method = results.methods[methodIndex]
   const { grid } = results
   const hardware = useHardware()
+  const ranger = useRanger()
   const layerInfos = availableLayers(results.layers)
   const replayShown = replayOn && view === '3d' && replay !== null
   // The cells the chosen sensors see, when they sit on the same grid as the detections.
@@ -367,7 +373,7 @@ function Dashboard({ results }: { results: Results }) {
       {park ? (
         <MemoParkSections state={parkState} k={parkK} rule={parkRule} onSelect={selectPark} />
       ) : (
-        <ResultSections results={results} method={method} hardware={hardware} />
+        <ResultSections results={results} method={method} hardware={hardware} ranger={ranger} />
       )}
       <Footer generated={results.generated} />
     </>
