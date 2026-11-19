@@ -1828,3 +1828,114 @@ td.has-std {
   padding-left: 20px;
   font-size: 15px;
 }
+
+/* Ranger response */
+.ranger-kicker {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+
+.ranger-explorer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ranger-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px 24px;
+}
+
+.ranger-ctl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ranger-ctl .card-label {
+  font-size: 13px;
+  color: var(--c-muted);
+}
+
+.ranger-ctl .segmented {
+  max-width: none;
+}
+
+.ranger-flag {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--s-quantum);
+}
+
+.ranger-ctl input:checked + span .ranger-flag {
+  color: #fdba74;
+}
+
+.ranger-key {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ranger-ramp {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--c-muted);
+}
+
+.ranger-ramp i {
+  flex: 0 1 200px;
+  min-width: 80px;
+  height: 12px;
+  border: 1px solid var(--c-hair);
+}
+
+.ranger-figs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.ranger-fig {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ranger-fig figcaption {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.ranger-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+
+.ranger-chip {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 719px) {
+  .ranger-figs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ranger .figures dd {
+    font-size: 30px;
+    white-space: normal;
+  }
+}
