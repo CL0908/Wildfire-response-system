@@ -54,7 +54,7 @@ From `python hardware_runs/iqm_garnet_2026-06-01/rescore.py`:
 "Mean ratio" counts a shot with the wrong number of sensors as 0.
 
 - The optimal placement (sites 0 and 6, objective 63.998) came up in 10 of 2,000 shots. Guessing a two-sensor placement at random would hit it about 71 times in 2,000.
-- The pitch reported "ratio 1.00". That was the best of 2,000 shots after classical repair; with 28 possible placements any sampler finds the optimum that way.
+- The pitch reported "ratio 1.00". **That figure is the best of 2,000 shots after greedy classical repair over only 28 possible placements. It is not evidence of any quantum contribution:** any sampler, including uniform noise, finds the optimum that way. The honest figure is the per-shot mean ratio without repair, 0.145 on hardware (see the table above), against 0.666 for a uniformly random two-sensor placement.
 - The noiseless simulation of this circuit puts almost no probability on the optimum, so the circuit itself was poor before noise came into it.
 - The device's output is closer to uniform noise than to the noiseless circuit (total variation distance 0.33 against 0.59). It still carries signal: the per-qubit frequencies correlate with the simulation at 0.73.
 - 22.5% of shots had exactly two sensors, more than the noiseless circuit gives. Measured qubits read 1 about 40% of the time on average, which favours low counts; that is consistent with qubits relaxing towards 0, not with the circuit enforcing the constraint.

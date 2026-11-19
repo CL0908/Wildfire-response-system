@@ -9,6 +9,7 @@ Usage:
 """
 
 import sys, os, argparse
+from math import comb
 sys.path.insert(0, os.path.dirname(__file__))
 
 from priority_surface import build_priority_surface, real_window_bounds
@@ -158,17 +159,27 @@ def main(quick=False, terrain="real"):
     if not quick:
         try:
             from solvers.qaoa import run_qaoa
+            from benchmark import QAOA_LAYERS
             for mode, label in [("plain", "QAOA"), ("xy", "XY-QAOA"), ("wsxy", "WSXY-QAOA")]:
-                r = run_qaoa(viewsheds, weights, N_SENSORS, p_layers=2, mode=mode)
+                r = run_qaoa(viewsheds, weights, N_SENSORS, p_layers=QAOA_LAYERS, mode=mode)
                 if r["chosen"]:
                     results[label] = (r["chosen"], r["objective"])
                     qaoa_stats[label] = dict(
                         shots=r["shots"],
+                        p_layers=QAOA_LAYERS,
+                        n_placements=comb(len(sites), N_SENSORS),
                         p_optimal=round(r["p_optimal"], 4),
-                        p_optimal_random=round(r["p_optimal_random"], 4),
+                        p_optimal_random=round(r["p_optimal_random"], 6),
                         p_feasible=round(r["p_feasible"], 4),
                         mean_ratio=round(r["mean_ratio"], 4),
+                        mean_ratio_random=round(r["mean_ratio_random"], 4),
+                        params_moved=r["params_moved"],
                     )
+                    if mode == "wsxy":
+                        qaoa_stats[label].update(
+                            start_mean_ratio=round(r["start_mean_ratio"], 4),
+                            start_p_optimal=round(r["start_p_optimal"], 4),
+                        )
                 print(f"    {label}: best shot {r['objective']:.4f}  "
                       f"P(optimal)={r['p_optimal']:.4f} "
                       f"(random placement {r['p_optimal_random']:.4f})  "

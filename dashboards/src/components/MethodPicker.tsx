@@ -1,4 +1,4 @@
-import { formatInt, formatPercent } from '../lib/format'
+import { formatPercent } from '../lib/format'
 import type { Results } from '../types'
 
 interface Props {
@@ -24,13 +24,13 @@ export default function MethodPicker({ results, selected, onSelect }: Props) {
             <strong>{m.name}</strong>
             <span className="muted">
               {m.sampling
-                ? `${m.kind} · best of ${formatInt(m.sampling.shots)} shots · avg shot ${formatPercent(m.sampling.mean_ratio)}`
+                ? `${m.kind} · mean per shot (random ${formatPercent(m.sampling.mean_ratio_random)})`
                 : m.kind}
             </span>
           </span>
           <span className="num">
-            {formatPercent(m.objective / results.optimum)}
-            <span className="sr-only"> of optimum</span>
+            {formatPercent(m.sampling ? m.sampling.mean_ratio : m.objective / results.optimum)}
+            <span className="sr-only"> of optimum{m.sampling ? ', mean per shot' : ''}</span>
           </span>
         </label>
       ))}
