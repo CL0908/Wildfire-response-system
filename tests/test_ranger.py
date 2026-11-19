@@ -396,3 +396,114 @@ def test_moving_constraint_binds():
     assert fast.defences[0].held and fast.defences[0].finish == 3
     assert not slow.defences[0].held and slow.defences[0].finish == 5
     assert fast.objective == 5 and slow.objective == 0
+
+
+# 8. real Khao Yai window and the dashboard exporter ----------------------------------------------
+
+import json
+import os
+
+from ranger_response.export_dashboard import build as export_build
+from ranger_response.real import build_real_surface, ignitions_by_fire_history, real_fuel_mask
+from ranger_response.run import make_instance_for
+
+RESULTS_JSON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "dashboards", "public", "results.json")
+
+
+def test_real_instance_is_the_site_window_cell_for_cell():
+    surf, inst = make_instance_for("real")
+    assert (inst.rows, inst.cols) == (20, 20) and surf["window"] == (15, 3)
+    assert inst.n_fuel == int((surf["hazard"] >= 0.55).sum()) == 256
+    assert np.array_equal(inst.fuel, surf["hazard"] >= 0.55)
+    assert np.array_equal(inst.dem_m, surf["dem_m"]) and np.array_equal(inst.value, surf["priority"])
+    if os.path.exists(RESULTS_JSON):
+        with open(RESULTS_JSON) as f:
+            site = json.load(f)
+        if site.get("terrain") == "real":
+            assert np.allclose(np.array(site["layers"]["hazard"]), surf["hazard"], atol=1e-4)
+            assert np.allclose(np.array(site["layers"]["elevation_m"]), surf["dem_m"], atol=0.1)
+            assert np.array_equal(np.array(site["layers"]["fire_count"]), surf["fire_count"])
+
+
+def test_real_default_ignition_is_most_burned_fuel_cell_and_station_is_edge_midpoint():
+    surf, inst = make_instance_for("real")
+    ig = inst.ignitions[0]
+    assert inst.fuel[ig]
+    assert surf["fire_count"][ig] == surf["fire_count"][inst.fuel].max()
+    tied = [rc for rc in zip(*np.nonzero(inst.fuel & (surf["fire_count"] == surf["fire_count"][ig])))]
+    assert surf["hazard"][ig] == max(surf["hazard"][rc] for rc in tied)
+    assert inst.stations == ((0, 10),)
+    alts = ignitions_by_fire_history(surf, inst.fuel, 4)
+    assert alts[0] == ig and len(set(alts)) == 4
+
+
+def test_real_landcover_rule_marks_every_cell_of_this_window_as_fuel():
+    surf = build_real_surface()
+    assert real_fuel_mask(surf, "landcover").all()
+    _, inst = make_instance_for("real", fuel_rule="landcover")
+    assert inst.n_fuel == 400
+    with pytest.raises(ValueError):
+        real_fuel_mask(surf, "nonsense")
+
+
+def test_synthetic_default_is_unchanged():
+    surf, inst = make_instance_for("synthetic")
+    assert inst.n_fuel == 253 and inst.ignitions == ((2, 5),) and inst.stations == ((0, 10),)
+    assert surf["source"] == "synthetic"
+
+
+@pytest.fixture(scope="module")
+def exported():
+    spec = [dict(id="t1", label="test one crew", fuel_rule="hazard", crews=1),
+            dict(id="t2", label="test landcover", fuel_rule="landcover", crews=1)]
+    data = export_build(time_limit=1.0, scenarios=spec)
+    return json.loads(json.dumps(data))      # must survive a JSON round trip
+
+
+def test_export_schema(exported):
+    d = exported
+    assert d["terrain"] == "real" and d["grid"]["rows"] == d["grid"]["cols"] == 20
+    assert d["grid"]["window"] == [15, 3] and set(d["grid"]["bounds"]) == {"north", "south", "west", "east"}
+    assert len(d["generated"]) == 10 and d["caveats"] and all(isinstance(c, str) for c in d["caveats"])
+    assert any("wind" in c for c in d["caveats"]) and any("straight line" in c for c in d["caveats"])
+    for s in d["scenarios"]:
+        assert len(s["fuel"]) == len(d["value"]) == 400 and sum(s["fuel"]) == s["n_fuel"]
+        assert [m["name"] for m in s["methods"]] == ["no response", "greedy", "exact"]
+        assert s["best"] in ("greedy", "exact") and s["ignitions"] and s["stations"]
+        for m in s["methods"]:
+            assert len(m["burn_step"]) == 400
+            assert {"value_saved", "cells_burned", "total_value", "proven_optimal", "stop_reason",
+                    "elapsed_s", "defences"} <= set(m)
+            for df in m["defences"]:
+                assert set(df) == {"crew", "order", "cell", "arrive", "finish", "fire_arrival", "held"}
+
+
+def test_export_value_saved_equals_never_burned_fuel_value_and_replays(exported):
+    for s in exported["scenarios"]:
+        fuel = np.array(s["fuel"], bool)
+        value = np.array(exported["value"])
+        by_name = {m["name"]: m for m in s["methods"]}
+
+        def kept(m):
+            never = np.array([b is None for b in m["burn_step"]])
+            return float(value[fuel & never].sum())
+
+        base = by_name["no response"]
+        assert base["value_saved"] == 0 and not base["defences"]
+        for name in ("greedy", "exact"):
+            m = by_name[name]
+            assert kept(m) - kept(base) == pytest.approx(m["value_saved"], abs=0.02)
+            burned = sum(b is not None for b in m["burn_step"])
+            assert burned == m["cells_burned"]
+            # the stored plan, replayed through simulate(), gives the stored burn steps
+            surf, inst = make_instance_for("real", s["fuel_rule"], crews=s["params"]["crews"])
+            routes = [[tuple(df["cell"]) for df in sorted(m["defences"], key=lambda x: x["order"])
+                       if df["crew"] == ci] for ci in range(inst.n_crews)]
+            res = simulate(inst, Plan.of(routes))
+            assert res.value_saved == pytest.approx(m["value_saved"], abs=1e-3)
+            steps = [None if not math.isfinite(v) else int(v) for v in res.burn_time.ravel()]
+            assert steps == m["burn_step"]
+            for df in m["defences"]:
+                if df["held"]:
+                    assert df["fire_arrival"] is None or df["finish"] <= df["fire_arrival"]

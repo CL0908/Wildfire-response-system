@@ -98,7 +98,7 @@ Every in-park cell is treated as a possible site, with no account of road access
 
 ## Ranger response
 
-`ranger_response/` plans where a ranger crew should cut firebreaks, and in what order, once a fire is detected. It runs on the synthetic terrain. It is a classical planner modelled on the Moving Firefighter Problem: fire spreads cell to cell through fuel, the crew takes time to travel, and a firebreak only holds if it is finished before the fire arrives. On the default case one crew's six firebreaks cut the burned area from 230 cells to 42. See `ranger_response/README.md` for the model and its simplifications.
+`ranger_response/` plans where a ranger crew should cut firebreaks, and in what order, once a fire is detected. By default it runs on the same real 20 x 20 Khao Yai window as the sensor placement (`--terrain synthetic` keeps the random surface). It is a classical planner modelled on the Moving Firefighter Problem: fire spreads cell to cell through fuel, the crew takes time to travel, and a firebreak only holds if it is finished before the fire arrives. On the default real-terrain case (fuel = hazard at or above 0.55) one crew's firebreaks cut the burned area from 237 of 256 fuel cells to about 35-39 in the best plan found, but that depends on the fuel rule: if every forest cell counts as fuel, one-cell firebreaks save almost nothing. See `ranger_response/README.md` for the model and its simplifications.
 
 Also in the repo: `solvers/qaoa_hardware.py`, a script for running QAOA on IBM quantum hardware, or IQM hardware through qBraid.
 

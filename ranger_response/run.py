@@ -1,6 +1,7 @@
 """Build the default 20x20 instance, run baseline / greedy / exact, print a table and save a figure.
 
-    MPLBACKEND=Agg python -m ranger_response.run [--seed 42] [--ignition r,c] [--station r,c]
+    MPLBACKEND=Agg python -m ranger_response.run [--terrain real|synthetic] [--fuel-rule hazard|landcover]
+                                                 [--seed 42] [--ignition r,c] [--station r,c]
                                                  [--crews 1] [--speed 3]
 """
 from __future__ import annotations
@@ -14,6 +15,7 @@ import numpy as np
 from priority_surface import build_priority_surface
 
 from .model import DEFAULT_FUEL_THRESHOLD, Plan, build_instance, simulate
+from .real import build_real_surface, ignitions_by_fire_history, real_fuel_mask
 from .solvers import solve_exact, solve_greedy
 
 GRID = 20
@@ -36,6 +38,34 @@ def default_station(rows, cols, ignition):
     """Midpoint of the grid edge that is closest to the ignition."""
     mids = [(0, cols // 2), (rows - 1, cols // 2), (rows // 2, 0), (rows // 2, cols - 1)]
     return min(mids, key=lambda m: (m[0] - ignition[0]) ** 2 + (m[1] - ignition[1]) ** 2)
+
+
+def make_instance_for(terrain="real", fuel_rule="hazard", fuel_threshold=DEFAULT_FUEL_THRESHOLD, seed=42,
+                      ignitions=None, stations=None, crews=1, speed=3.0, work_time=1, value="priority"):
+    """Build (surface, instance) for the CLI and the exporter.
+
+    terrain "real": the 20 x 20 Khao Yai window main.py uses; fuel from `fuel_rule` ("hazard" or
+    "landcover"); default ignition = fuel cell with the most real FIRMS detections (ties: hazard).
+    terrain "synthetic": seeded synthetic surface, fuel = hazard >= threshold, default ignition =
+    highest-hazard fuel cell. Default station (both): midpoint of the grid edge nearest the ignition.
+    """
+    if terrain == "real":
+        surf = build_real_surface(GRID, seed=42)
+        fuel = real_fuel_mask(surf, fuel_rule, fuel_threshold)
+        ig = list(ignitions or [ignitions_by_fire_history(surf, fuel, 1)[0]])
+    elif terrain == "synthetic":
+        surf = build_priority_surface(GRID, GRID, seed)
+        fuel = surf["hazard"] >= fuel_threshold
+        ig = list(ignitions or [default_ignition(surf, fuel_threshold)])
+    else:
+        raise ValueError(f"terrain must be 'real' or 'synthetic', got {terrain!r}")
+    st = default_station(GRID, GRID, ig[0])
+    sts = list(stations or [])
+    sts += [sts[-1] if sts else st] * (crews - len(sts))
+    sts = sts[:crews]
+    inst = build_instance(surf, ig, sts, fuel_threshold, value, speed, work_time, fuel=fuel)
+    inst.params.update(terrain=terrain, fuel_rule=fuel_rule if terrain == "real" else "hazard")
+    return surf, inst
 
 
 def _outline_segments(mask):
@@ -103,7 +133,9 @@ def plot(inst, base, best, label, path):
     ax.set_yticks(np.arange(0, rows * CELL_KM + 0.01, 1.0))
     ax.set_xlabel("East (km)")
     ax.set_ylabel("South (km)")
-    ax.set_title(f"Ranger response plan on synthetic terrain (not real survey data)\n{label}: "
+    terrain = ("real Khao Yai 10 km window (modelled fire spread)" if inst.params.get("terrain") == "real"
+               else "synthetic terrain (not real survey data)")
+    ax.set_title(f"Ranger response plan on {terrain}\n{label}: "
                  f"burned {best.cells_burned} of {inst.n_fuel} fuel cells "
                  f"(baseline {base.cells_burned}), value saved {best.value_saved:.1f}", fontsize=11)
     handles = [Patch(fc="#bcd9a8", label="fuel, never reached by fire"), Patch(fc="#ecebe6", label="no fuel"),
@@ -121,8 +153,12 @@ def plot(inst, base, best, label, path):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--ignition", type=parse_cell, action="append", help="r,c (repeatable); default: highest-hazard fuel cell")
+    ap.add_argument("--terrain", choices=("real", "synthetic"), default="real",
+                    help="real: the 20x20 Khao Yai window used by main.py (default); synthetic: seeded random terrain")
+    ap.add_argument("--fuel-rule", choices=("hazard", "landcover"), default="hazard",
+                    help="real terrain only: hazard >= --fuel-threshold, or land-cover (tree/shrub/grass/crop >= 50%%)")
+    ap.add_argument("--seed", type=int, default=42, help="synthetic terrain only")
+    ap.add_argument("--ignition", type=parse_cell, action="append", help="r,c (repeatable); default: real = fuel cell with most FIRMS detections, synthetic = highest-hazard fuel cell")
     ap.add_argument("--station", type=parse_cell, action="append", help="r,c per crew (repeatable); default: edge midpoint nearest the ignition")
     ap.add_argument("--crews", type=int, default=1)
     ap.add_argument("--speed", type=float, default=3.0, help="cells per step")
@@ -131,22 +167,28 @@ def main(argv=None):
     ap.add_argument("--value", default="priority", help="surface layer used as value")
     ap.add_argument("--time-limit", type=float, default=20.0, help="seconds for the exact solver")
     ap.add_argument("--node-limit", type=int, default=300_000)
-    ap.add_argument("--out", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "ranger_response.png"))
+    ap.add_argument("--out", default=None, help="figure path; default ranger_response.png (real) or "
+                                                "ranger_response_synthetic.png (synthetic), next to this file")
     a = ap.parse_args(argv)
+    if a.out is None:
+        name = "ranger_response.png" if a.terrain == "real" else "ranger_response_synthetic.png"
+        a.out = os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
 
-    surf = build_priority_surface(GRID, GRID, a.seed)
-    ignitions = a.ignition or [default_ignition(surf, a.fuel_threshold)]
-    st = default_station(GRID, GRID, ignitions[0])
-    stations = list(a.station or [])
-    stations += [stations[-1] if stations else st] * (a.crews - len(stations))
-    stations = stations[:a.crews]
     try:
-        inst = build_instance(surf, ignitions, stations, a.fuel_threshold, a.value, a.speed, a.work_time)
+        surf, inst = make_instance_for(a.terrain, a.fuel_rule, a.fuel_threshold, a.seed, a.ignition,
+                                       a.station, a.crews, a.speed, a.work_time, a.value)
     except (ValueError, KeyError) as e:
         sys.exit(f"error: {e.args[0] if e.args else e}")
+    ignitions, stations = list(inst.ignitions), list(inst.stations)
 
-    print(f"grid {GRID}x{GRID}, seed {a.seed}; fuel = hazard >= {a.fuel_threshold}: "
-          f"{inst.n_fuel} fuel cells ({100 * inst.n_fuel / GRID**2:.0f}%)")
+    if a.terrain == "real":
+        rule = (f"hazard >= {a.fuel_threshold}" if a.fuel_rule == "hazard"
+                else "land cover (tree+shrub+grass+crop >= 50%)")
+        print(f"real Khao Yai window (row0, col0) = {surf['window']}, grid {GRID}x{GRID}; fuel = {rule}: "
+              f"{inst.n_fuel} fuel cells ({100 * inst.n_fuel / GRID**2:.0f}%)")
+    else:
+        print(f"synthetic grid {GRID}x{GRID}, seed {a.seed}; fuel = hazard >= {a.fuel_threshold}: "
+              f"{inst.n_fuel} fuel cells ({100 * inst.n_fuel / GRID**2:.0f}%)")
     print(f"ignition(s) (row,col): {ignitions}; station(s): {stations}; crews {a.crews}, "
           f"speed {a.speed} cells/step, work {a.work_time} step(s); value layer '{a.value}'")
 
