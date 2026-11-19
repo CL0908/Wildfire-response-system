@@ -1,4 +1,5 @@
 import { formatInt, formatPercent } from '../lib/format'
+import { randomBestHitProbability } from '../lib/sampling'
 import type { Method, Results } from '../types'
 
 interface Props {
@@ -33,11 +34,17 @@ export default function MethodDetail({ results, method }: Props) {
       </dl>
       {s && (
         <p className="note">
-          Best of {formatInt(s.shots)} simulated shots. A single shot is optimal{' '}
-          {formatPercent(s.p_optimal)} of the time (random placement:{' '}
-          {formatPercent(s.p_optimal_random)}); {formatPercent(s.p_feasible)} of
-          shots place exactly {results.n_sensors} sensors. On average one shot
-          reaches {formatPercent(s.mean_ratio)} of the optimum.
+          Mean score per simulated shot: {formatPercent(s.mean_ratio)} of the optimum (infeasible
+          shots count 0). Random {results.n_sensors}-sensor placement: {formatPercent(s.mean_ratio_random)}.
+          {s.start_mean_ratio !== undefined && (
+            <> Warm-start state before any circuit layers: {formatPercent(s.start_mean_ratio)}.</>
+          )}{' '}
+          {formatPercent(s.p_feasible)} of shots place exactly {results.n_sensors} sensors. A single
+          shot is optimal {formatPercent(s.p_optimal)} of the time (random placement:{' '}
+          {formatPercent(s.p_optimal_random)}). The placement drawn on the map is the best of{' '}
+          {formatInt(s.shots)} shots, which is not evidence the circuit works: random draws reach
+          the optimum with probability {formatPercent(randomBestHitProbability(s))} in the same
+          number of shots.
         </p>
       )}
     </div>

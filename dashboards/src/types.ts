@@ -29,10 +29,19 @@ export interface Site {
 
 export interface Sampling {
   shots: number
+  /** Number of possible N-sensor placements, C(sites, N). */
+  n_placements: number
+  p_layers: number
   p_optimal: number
   p_optimal_random: number
   p_feasible: number
+  /** Mean score per shot as a fraction of the optimum; infeasible shots count 0. */
   mean_ratio: number
+  /** Same mean for uniformly random N-sensor placements. */
+  mean_ratio_random: number
+  /** WSXY only: mean score and P(optimal) of the warm-start state before any circuit layers. */
+  start_mean_ratio?: number
+  start_p_optimal?: number
 }
 
 export interface Method {

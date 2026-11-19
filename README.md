@@ -45,6 +45,10 @@ There is no quantum advantage here. In all 60 instances greedy scores at least a
 
 Limits of the QAOA results: they come from a noiseless simulator that applies the exact coverage objective as a phase, which is not a shallow circuit on real hardware.
 
+- Best-of-shots ratios are not reported as evidence of the circuit working. The shot count (2,000) exceeds or approaches the number of feasible placements (28, 220 and 1,820 for the three instance sizes), so uniformly random sampling also reaches the optimum with high probability. The per-shot mean, next to random placement and the WSXY start state, is the figure to read.
+- The hardware path uses a 2-local approximation of the coverage objective. It is exact only when at most 2 chosen sites see a cell; in random tests with heavier overlap its feasible argmin was the true optimum only about 57% of the time.
+- Hardware `objective` numbers are best of shots after classical repair, whereas the per-shot means (simulated and hardware) are unrepaired.
+
 ## Hardware runs
 
 `hardware_runs/iqm_garnet_2026-06-01/` holds the raw data of the first of two jobs on real quantum hardware: plain QAOA with two layers on IQM Garnet (20 qubits), 2,000 shots, on a small synthetic instance with 8 sites and 2 sensors. Scored per shot with no repair, 22.5% of shots placed exactly 2 sensors and 0.5% were the optimal placement; a random 2-sensor placement is optimal 3.6% of the time. The circuit used the original cost function, which double-counted overlapping coverage, and the device's output was closer to uniform noise than to the noiseless circuit. See that folder's README for how the circuit and the counts were decoded.
