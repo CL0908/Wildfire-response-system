@@ -98,7 +98,7 @@ Every in-park cell is treated as a possible site, with no account of road access
 
 ## Ranger response
 
-`ranger_response/` plans where a ranger crew should cut firebreaks, and in what order, once a fire is detected. By default it runs on the same real 20 x 20 Khao Yai window as the sensor placement (`--terrain synthetic` keeps the random surface). It is a classical planner modelled on the Moving Firefighter Problem: fire spreads cell to cell through fuel, the crew takes time to travel, and a firebreak only holds if it is finished before the fire arrives. On the default real-terrain case (fuel = hazard at or above 0.55) one crew's firebreaks cut the burned area from 237 of 256 fuel cells to about 35-39 in the best plan found, but that depends on the fuel rule: if every forest cell counts as fuel, one-cell firebreaks save almost nothing. See `ranger_response/README.md` for the model and its simplifications.
+`ranger_response/` plans where one or two ranger crews should cut firebreaks, and in what order, once a fire is detected. It runs on the same real 20 x 20 Khao Yai window as the sensor placement. Model v2 (the default) reuses the sensor analysis's fire-spread model (land-cover fuel, slope, one daytime wind per scenario, 24 h horizon); crews walk in straight lines at an assumed 2 km/h and take about 5 h to cut a 500 m line (from a published handline rate, with an assumed crew of 10); a firebreak holds only if it is finished before the fire arrives, and fire cannot slip diagonally between two firebreaks. It compares greedy, greedy with a 2-step lookahead, and an exact branch and bound on 20 seeded scenarios. The first version of this planner (v1) showed a large greedy-versus-exact gap only under an arbitrary fuel threshold, so v2 replaced it and the numbers were remeasured. In v2, with one crew exact saves 44% of the value that burns within 24 h against greedy's 38% (a median 5.8 percentage point gap), and a 2-step lookahead gets within 0.8 points of exact; with two crews the figures are 68%, 57% and 62%, with exact proven optimal in only 12 of 20 scenarios. In absolute terms this is small (exact over greedy is about 0.5 of the window's 153 value units), exact plans often finish breaks minutes before the modelled fire, and nothing is calibrated against a real fire. See `ranger_response/README.md` for the model, sources, protocol and all tables.
 
 Also in the repo: `solvers/qaoa_hardware.py`, a script for running QAOA on IBM quantum hardware, or IQM hardware through qBraid.
 
@@ -110,7 +110,7 @@ python main.py                      # full pipeline on the real 10 km window
 python main.py --terrain synthetic  # the same on synthetic terrain
 python main.py --quick              # 15 × 15 grid (7.5 km), skips QAOA
 python benchmark.py                 # 20 instances at each of three sizes, about 12 minutes
-python -m ranger_response.run       # ranger response plan for the default fire
+python -m ranger_response.run       # ranger response plan (model v2) for the default fire
 python -m pytest tests              # checks the solvers against brute force (pip install pytest)
 ```
 

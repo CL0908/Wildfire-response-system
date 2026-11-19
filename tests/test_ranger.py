@@ -398,12 +398,11 @@ def test_moving_constraint_binds():
     assert fast.objective == 5 and slow.objective == 0
 
 
-# 8. real Khao Yai window and the dashboard exporter ----------------------------------------------
+# 8. real Khao Yai window (model v1; the dashboard exporter and model v2 are tested in test_ranger_v2.py) ----------------------------------------------
 
 import json
 import os
 
-from ranger_response.export_dashboard import build as export_build
 from ranger_response.real import build_real_surface, ignitions_by_fire_history, real_fuel_mask
 from ranger_response.run import make_instance_for
 
@@ -451,59 +450,3 @@ def test_synthetic_default_is_unchanged():
     surf, inst = make_instance_for("synthetic")
     assert inst.n_fuel == 253 and inst.ignitions == ((2, 5),) and inst.stations == ((0, 10),)
     assert surf["source"] == "synthetic"
-
-
-@pytest.fixture(scope="module")
-def exported():
-    spec = [dict(id="t1", label="test one crew", fuel_rule="hazard", crews=1),
-            dict(id="t2", label="test landcover", fuel_rule="landcover", crews=1)]
-    data = export_build(time_limit=1.0, scenarios=spec)
-    return json.loads(json.dumps(data))      # must survive a JSON round trip
-
-
-def test_export_schema(exported):
-    d = exported
-    assert d["terrain"] == "real" and d["grid"]["rows"] == d["grid"]["cols"] == 20
-    assert d["grid"]["window"] == [15, 3] and set(d["grid"]["bounds"]) == {"north", "south", "west", "east"}
-    assert len(d["generated"]) == 10 and d["caveats"] and all(isinstance(c, str) for c in d["caveats"])
-    assert any("wind" in c for c in d["caveats"]) and any("straight line" in c for c in d["caveats"])
-    for s in d["scenarios"]:
-        assert len(s["fuel"]) == len(d["value"]) == 400 and sum(s["fuel"]) == s["n_fuel"]
-        assert [m["name"] for m in s["methods"]] == ["no response", "greedy", "exact"]
-        assert s["best"] in ("greedy", "exact") and s["ignitions"] and s["stations"]
-        for m in s["methods"]:
-            assert len(m["burn_step"]) == 400
-            assert {"value_saved", "cells_burned", "total_value", "proven_optimal", "stop_reason",
-                    "elapsed_s", "defences"} <= set(m)
-            for df in m["defences"]:
-                assert set(df) == {"crew", "order", "cell", "arrive", "finish", "fire_arrival", "held"}
-
-
-def test_export_value_saved_equals_never_burned_fuel_value_and_replays(exported):
-    for s in exported["scenarios"]:
-        fuel = np.array(s["fuel"], bool)
-        value = np.array(exported["value"])
-        by_name = {m["name"]: m for m in s["methods"]}
-
-        def kept(m):
-            never = np.array([b is None for b in m["burn_step"]])
-            return float(value[fuel & never].sum())
-
-        base = by_name["no response"]
-        assert base["value_saved"] == 0 and not base["defences"]
-        for name in ("greedy", "exact"):
-            m = by_name[name]
-            assert kept(m) - kept(base) == pytest.approx(m["value_saved"], abs=0.02)
-            burned = sum(b is not None for b in m["burn_step"])
-            assert burned == m["cells_burned"]
-            # the stored plan, replayed through simulate(), gives the stored burn steps
-            surf, inst = make_instance_for("real", s["fuel_rule"], crews=s["params"]["crews"])
-            routes = [[tuple(df["cell"]) for df in sorted(m["defences"], key=lambda x: x["order"])
-                       if df["crew"] == ci] for ci in range(inst.n_crews)]
-            res = simulate(inst, Plan.of(routes))
-            assert res.value_saved == pytest.approx(m["value_saved"], abs=1e-3)
-            steps = [None if not math.isfinite(v) else int(v) for v in res.burn_time.ravel()]
-            assert steps == m["burn_step"]
-            for df in m["defences"]:
-                if df["held"]:
-                    assert df["fire_arrival"] is None or df["finish"] <= df["fire_arrival"]
